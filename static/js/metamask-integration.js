@@ -11,16 +11,6 @@ class MetaMaskVoting {
         this.contractAddress = null;
         this.contractABI = [
             {
-                "inputs": [
-                    {"internalType": "bytes32", "name": "_voterHash", "type": "bytes32"},
-                    {"internalType": "string", "name": "_partyId", "type": "string"}
-                ],
-                "name": "castVote",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
-            },
-            {
                 "inputs": [{"internalType": "bytes32", "name": "_voterHash", "type": "bytes32"}],
                 "name": "hasVoted",
                 "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
@@ -68,13 +58,80 @@ class MetaMaskVoting {
      * Initialize MetaMask integration
      */
     async init() {
-        if (typeof window.ethereum !== 'undefined') {
-            this.web3 = new Web3(window.ethereum);
-            await this.setupEventListeners();
-            await this.checkConnection();
-        } else {
-            console.warn('MetaMask not detected');
+        try {
+            if (typeof window.ethereum !== 'undefined') {
+                this.web3 = new Web3(window.ethereum);
+                await this.setupEventListeners();
+                await this.checkConnection();
+                console.log('MetaMask integration initialized successfully');
+            } else {
+                console.warn('MetaMask not detected. Blockchain features will be disabled.');
+                this.showMetaMaskInstallPrompt();
+            }
+        } catch (error) {
+            console.error('Failed to initialize MetaMask:', error);
+            this.showMetaMaskError(error.message);
         }
+    }
+
+    /**
+     * Show MetaMask installation prompt
+     */
+    showMetaMaskInstallPrompt() {
+        if (typeof window !== 'undefined' && document.getElementById('metamask-install-prompt')) {
+            const promptEl = document.getElementById('metamask-install-prompt');
+            promptEl.style.display = 'block';
+        }
+    }
+
+    /**
+     * Show MetaMask error message
+     */
+    showMetaMaskError(message) {
+        console.error('MetaMask Error:', message);
+        if (typeof window !== 'undefined') {
+            // Create or update error message element
+            let errorEl = document.getElementById('metamask-error');
+            if (!errorEl) {
+                errorEl = document.createElement('div');
+                errorEl.id = 'metamask-error';
+                errorEl.className = 'alert alert-warning metamask-error';
+                errorEl.style.cssText = 'margin: 1rem 0; padding: 1rem; border-radius: 8px; background: #fff3cd; border: 1px solid #ffeaa7; color: #856404;';
+                
+                // Find a good place to insert the error message
+                const container = document.querySelector('.voting-container') || document.querySelector('.container') || document.body;
+                container.insertBefore(errorEl, container.firstChild);
+            }
+            errorEl.innerHTML = `
+                <div style="display: flex; align-items: center;">
+                    <i class="fas fa-exclamation-triangle" style="margin-right: 0.5rem;"></i>
+                    <div>
+                        <strong>MetaMask Not Available:</strong> ${message}
+                        <br><small>Don't worry! You can still vote using the traditional method.</small>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Check if MetaMask is available and ready
+     */
+    isMetaMaskAvailable() {
+        return typeof window.ethereum !== 'undefined' && window.ethereum.isMetaMask;
+    }
+
+    /**
+     * Get MetaMask status information
+     */
+    getStatus() {
+        return {
+            isAvailable: this.isMetaMaskAvailable(),
+            isConnected: this.isConnected,
+            account: this.account,
+            networkId: this.networkId,
+            hasContract: !!this.contract
+        };
     }
 
     /**
@@ -119,17 +176,35 @@ class MetaMaskVoting {
      */
     async connectWallet() {
         try {
+            // Check if MetaMask is installed
             if (typeof window.ethereum === 'undefined') {
-                throw new Error('MetaMask is not installed. Please install MetaMask to continue.');
+                const error = 'MetaMask extension not found. Please install MetaMask from https://metamask.io/';
+                this.showMetaMaskError(error);
+                throw new Error(error);
+            }
+
+            // Check if MetaMask is accessible
+            if (!window.ethereum.isMetaMask) {
+                const error = 'MetaMask not detected. Please make sure MetaMask is installed and enabled.';
+                this.showMetaMaskError(error);
+                throw new Error(error);
             }
 
             // Request account access
             const accounts = await window.ethereum.request({
                 method: 'eth_requestAccounts'
+            }).catch((err) => {
+                if (err.code === 4001) {
+                    throw new Error('User rejected the request to connect to MetaMask.');
+                } else if (err.code === -32002) {
+                    throw new Error('MetaMask is already processing a connection request. Please check MetaMask.');
+                } else {
+                    throw new Error('Failed to connect to MetaMask: ' + err.message);
+                }
             });
 
             if (accounts.length === 0) {
-                throw new Error('No accounts found. Please unlock MetaMask.');
+                throw new Error('No accounts found. Please unlock MetaMask and try again.');
             }
 
             this.account = accounts[0];
@@ -141,6 +216,14 @@ class MetaMaskVoting {
 
             // Update UI
             this.updateUI();
+
+            // Hide any error messages
+            const errorEl = document.getElementById('metamask-error');
+            if (errorEl) {
+                errorEl.style.display = 'none';
+            }
+
+            console.log('MetaMask connected successfully:', this.account);
 
             return {
                 success: true,
@@ -169,16 +252,21 @@ class MetaMaskVoting {
         try {
             // Get contract address from backend or environment
             const contractAddress = await this.getContractAddress();
-            if (contractAddress) {
+            if (contractAddress && contractAddress !== '0x...' && contractAddress !== 'undefined') {
                 this.contractAddress = contractAddress;
                 this.contract = new this.web3.eth.Contract(this.contractABI, contractAddress);
+                console.log('Smart contract initialized:', contractAddress);
             } else {
-                console.warn('Contract address not configured');
-                this.updateTransactionStatus('error', 'Smart contract not configured. Please contact administrator.');
+                console.warn('Contract address not configured - blockchain voting disabled');
+                this.contract = null;
+                // Don't show error to user, just log it
+                console.info('Smart contract not configured. Traditional voting will be used.');
             }
         } catch (error) {
             console.error('Error initializing contract:', error);
-            this.updateTransactionStatus('error', 'Failed to initialize smart contract. Please check network connection.');
+            this.contract = null;
+            // Don't show error UI, just disable blockchain features
+            console.info('Failed to initialize smart contract. Traditional voting will be used.');
         }
     }
 
@@ -187,9 +275,39 @@ class MetaMaskVoting {
      */
     async getContractAddress() {
         try {
-            // This should be configured in your Django settings or fetched from API
-            // For now, return a placeholder - you'll need to set this up
-            return process.env.VOTING_CONTRACT_ADDRESS || '0x...'; // Replace with actual contract address
+            // Check for contract address in various places
+            
+            // 1. Environment variable (if available)
+            if (typeof process !== 'undefined' && process.env && process.env.VOTING_CONTRACT_ADDRESS) {
+                return process.env.VOTING_CONTRACT_ADDRESS;
+            }
+            
+            // 2. Meta tag in HTML
+            const metaTag = document.querySelector('meta[name="voting-contract-address"]');
+            if (metaTag && metaTag.getAttribute('content')) {
+                return metaTag.getAttribute('content');
+            }
+            
+            // 3. Global variable
+            if (typeof window.VOTING_CONTRACT_ADDRESS !== 'undefined') {
+                return window.VOTING_CONTRACT_ADDRESS;
+            }
+            
+            // 4. Try to fetch from backend API (if available)
+            try {
+                const response = await fetch('/api/blockchain/contract-address/');
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.address;
+                }
+            } catch (fetchError) {
+                console.log('Could not fetch contract address from API:', fetchError.message);
+            }
+            
+            // 5. Return null if not found anywhere
+            console.warn('Voting contract address not configured in any location');
+            return null;
+            
         } catch (error) {
             console.error('Error getting contract address:', error);
             return null;
@@ -210,14 +328,15 @@ class MetaMaskVoting {
     async hasVoted(voterHash) {
         try {
             if (!this.contract) {
-                throw new Error('Contract not initialized');
+                console.warn('Contract not available for vote checking - assuming not voted');
+                return false; // Assume not voted if contract unavailable
             }
 
             const voted = await this.contract.methods.hasVoted(voterHash).call();
             return voted;
         } catch (error) {
             console.error('Error checking vote status:', error);
-            return false;
+            return false; // Default to allowing vote if check fails
         }
     }
 
@@ -227,84 +346,15 @@ class MetaMaskVoting {
     async isVotingActive() {
         try {
             if (!this.contract) {
-                throw new Error('Contract not initialized');
+                console.warn('Contract not available for voting status check - assuming active');
+                return true; // Assume voting is active if contract unavailable
             }
 
             const active = await this.contract.methods.isVotingActive().call();
             return active;
         } catch (error) {
             console.error('Error checking voting status:', error);
-            return false;
-        }
-    }
-
-    /**
-     * Cast vote on blockchain with transaction tracking
-     */
-    async castVote(voterData, partyId) {
-        try {
-            if (!this.isConnected) {
-                throw new Error('Wallet not connected');
-            }
-
-            if (!this.contract) {
-                throw new Error('Contract not initialized');
-            }
-
-            // Generate voter hash
-            const voterHash = this.generateVoterHash(voterData);
-
-            // Check if already voted
-            const alreadyVoted = await this.hasVoted(voterHash);
-            if (alreadyVoted) {
-                throw new Error('You have already voted');
-            }
-
-            // Check if voting is active
-            const votingActive = await this.isVotingActive();
-            if (!votingActive) {
-                throw new Error('Voting is not currently active');
-            }
-
-            // Update UI to show transaction pending
-            this.updateTransactionStatus('pending', 'Preparing transaction...');
-
-            // Estimate gas
-            const gasEstimate = await this.contract.methods
-                .castVote(voterHash, partyId)
-                .estimateGas({ from: this.account });
-
-            this.updateTransactionStatus('pending', 'Sending transaction to blockchain...');
-
-            // Send transaction
-            const transaction = await this.contract.methods
-                .castVote(voterHash, partyId)
-                .send({
-                    from: this.account,
-                    gas: Math.floor(gasEstimate * 1.2), // Add 20% buffer
-                });
-
-            this.updateTransactionStatus('confirming', `Transaction sent. Hash: ${transaction.transactionHash}`);
-
-            // Wait for confirmation
-            const receipt = await this.waitForTransactionConfirmation(transaction.transactionHash);
-
-            this.updateTransactionStatus('confirmed', `Vote confirmed! Block: ${receipt.blockNumber}`);
-
-            return {
-                success: true,
-                transactionHash: transaction.transactionHash,
-                blockNumber: receipt.blockNumber,
-                gasUsed: receipt.gasUsed
-            };
-
-        } catch (error) {
-            console.error('Error casting vote:', error);
-            this.updateTransactionStatus('error', `Transaction failed: ${error.message}`);
-            return {
-                success: false,
-                error: error.message
-            };
+            return true; // Default to allowing vote if check fails
         }
     }
 
@@ -524,18 +574,69 @@ class MetaMaskVoting {
 }
 
 // Initialize MetaMask integration when DOM is loaded
+// Initialize MetaMask integration immediately or create safe fallback
 let metaMaskVoting;
 
+// Create a safe wrapper that handles initialization and errors gracefully
+function createMetaMaskWrapper() {
+    return {
+        isConnected: false,
+        isMetaMaskAvailable: () => typeof window.ethereum !== 'undefined' && window.ethereum.isMetaMask,
+        connectWallet: async () => {
+            if (!window.metaMaskVoting.isMetaMaskAvailable()) {
+                throw new Error('MetaMask extension not found. Please install MetaMask from https://metamask.io/');
+            }
+            if (metaMaskVoting && typeof metaMaskVoting.connectWallet === 'function') {
+                return await metaMaskVoting.connectWallet();
+            }
+            throw new Error('MetaMask integration not fully initialized yet. Please wait for page to load.');
+        },
+        getStatus: () => {
+            if (metaMaskVoting && typeof metaMaskVoting.getStatus === 'function') {
+                return metaMaskVoting.getStatus();
+            }
+            return {
+                isAvailable: typeof window.ethereum !== 'undefined' && window.ethereum.isMetaMask,
+                isConnected: false,
+                account: null,
+                networkId: null,
+                hasContract: false
+            };
+        }
+    };
+}
+
+// Make it available immediately
+window.metaMaskVoting = createMetaMaskWrapper();
+
 document.addEventListener('DOMContentLoaded', function() {
-    metaMaskVoting = new MetaMaskVoting();
+    console.log('Initializing MetaMask integration...');
+    
+    try {
+        metaMaskVoting = new MetaMaskVoting();
+        
+        // Update the global reference once initialized
+        window.metaMaskVoting = metaMaskVoting;
+        
+        console.log('MetaMask integration fully initialized');
+        
+    } catch (error) {
+        console.error('Failed to initialize MetaMask integration:', error);
+        // Keep the safe wrapper in place
+    }
     
     // Bind connect wallet button
     const connectBtn = document.getElementById('connectWalletBtn');
     if (connectBtn) {
         connectBtn.addEventListener('click', async () => {
-            const result = await metaMaskVoting.connectWallet();
-            if (!result.success) {
-                alert('Failed to connect wallet: ' + result.error);
+            try {
+                const result = await window.metaMaskVoting.connectWallet();
+                if (!result.success) {
+                    alert('Failed to connect wallet: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Connect wallet error:', error);
+                alert('Error connecting to MetaMask: ' + error.message);
             }
         });
     }
@@ -543,4 +644,3 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Export for global access
 window.MetaMaskVoting = MetaMaskVoting;
-window.metaMaskVoting = metaMaskVoting;

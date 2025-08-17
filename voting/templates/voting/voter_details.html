@@ -298,7 +298,7 @@ function changeEmail() {
 
 function sendOTP() {
     // Send OTP for email verification
-    fetch('{% url "voting:send_otp" %}', {
+    fetch('{% url "voting:email_verification" %}', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

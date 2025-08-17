@@ -25,7 +25,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure--3rw&0&lsvg0m$4v_6q&gb*==z9f6^e3!cxnj5u=p&j%7igsg*'
+# Generate a more secure secret key for development
+SECRET_KEY = 'django-dev-key-7x9z2m8n5q4w6e8r9t0y1u3i5o7p9a2s4d6f8g0h2j4k6l8m0n2b4v6c8x0z3e5r7t9y'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -159,6 +160,15 @@ SESSION_SAVE_EVERY_REQUEST = True  # Save session on every request
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # Expire when browser closes
 SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
 SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access to session cookie
+
+# CSRF settings
+CSRF_COOKIE_SECURE = False  # Set to True in production with HTTPS
+CSRF_COOKIE_HTTPONLY = True
+
+# Security settings for development
+# These should be enabled in production with HTTPS
+SECURE_HSTS_SECONDS = 0  # Disabled for development
+SECURE_SSL_REDIRECT = False  # Disabled for development
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

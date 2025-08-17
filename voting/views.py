@@ -13,6 +13,7 @@ from django.db import models
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth import authenticate, login, logout
+import logging
 from django.db.models import Count, Q
 import json
 import hashlib
@@ -338,6 +339,7 @@ class EmailVerificationView(View):
                     
                     # Store verified voter in session
                     request.session['verified_voter_id'] = voter_id
+                    request.session['email_verified'] = True  # Add this line
                     
                     return JsonResponse({
                         'success': True,
@@ -348,6 +350,7 @@ class EmailVerificationView(View):
                     logger.error(f"Error updating verification record: {e}")
                     # Even if database update fails, the verification was successful
                     request.session['verified_voter_id'] = voter_id
+                    request.session['email_verified'] = True  # Add this line too
                     return JsonResponse({
                         'success': True,
                         'message': 'Email verified successfully'
@@ -648,6 +651,8 @@ class VoterProfileView(View):
             data = json.loads(request.body)
             action = data.get('action')
             
+            logger.info(f"VoterProfileView POST: action={action}, data keys={list(data.keys())}")
+            
             if action == 'send_vote_otp':
                 # Check session
                 pending_voter_id = request.session.get('pending_voter_id')
@@ -742,6 +747,7 @@ class VoterProfileView(View):
                 if verification_result['success']:
                     # Mark as verified for voting
                     request.session['verified_voter_id'] = str(voter.id)
+                    request.session['verified_voter_email'] = voter.email
                     request.session['email_verified'] = True
                     request.session.pop('vote_verification_pending', None)
                     
@@ -755,6 +761,164 @@ class VoterProfileView(View):
                         'success': False,
                         'message': verification_result.get('error', 'Invalid verification code'),
                         'remaining_attempts': verification_result.get('remaining_attempts')
+                    })
+            
+            elif action == 'submit_vote':
+                # Handle vote submission using the same logic as CastVoteView
+                party_id = data.get('party_id')
+                
+                logger.info(f"Starting vote submission: party_id={party_id}")
+                
+                if not party_id:
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'Party ID is required'
+                    })
+                
+                # Check if voter is verified and ready to vote
+                verified_voter_email = request.session.get('verified_voter_email')
+                email_verified = request.session.get('email_verified', False)
+                
+                logger.info(f"Voter verification status: email={verified_voter_email}, verified={email_verified}")
+                
+                if not verified_voter_email or not email_verified:
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'Please verify your email first before voting'
+                    })
+                
+                # Use the vote casting logic from CastVoteView
+                try:
+                    # Get voter and party objects
+                    try:
+                        voter = Voter.objects.get(email=verified_voter_email, is_active=True)
+                        logger.info(f"Found voter: {voter.id} - {voter.email}")
+                        
+                        # Always try to find party by party_id field first (this is what the frontend sends)
+                        party = PoliticalParty.objects.get(party_id=party_id, is_active=True)
+                        logger.info(f"Found party by party_id: {party.id} - {party.party_id} - {party.party_name}")
+                            
+                    except Voter.DoesNotExist:
+                        logger.error(f"Voter not found with email: {verified_voter_email}")
+                        return JsonResponse({
+                            'success': False,
+                            'message': 'Voter not found'
+                        })
+                    except PoliticalParty.DoesNotExist:
+                        logger.error(f"Party not found with party_id: {party_id}")
+                        return JsonResponse({
+                            'success': False,
+                            'message': 'Invalid party selection'
+                        })
+                    
+                    # Check if voter has already voted
+                    existing_votes = Vote.objects.filter(voter=voter)
+                    if existing_votes.exists():
+                        logger.warning(f"Voter {voter.id} has already voted. Existing votes: {list(existing_votes.values_list('id', 'political_party__party_name'))}")
+                        return JsonResponse({
+                            'success': False,
+                            'message': 'You have already cast your vote. Multiple voting is not allowed.'
+                        })
+                    
+                    # Generate voter hash for blockchain
+                    voter_data = {
+                        'id': str(voter.id),
+                        'email': voter.email,
+                        'aadhaar_number': voter.aadhaar_number
+                    }
+                    voter_hash = blockchain_client.generate_voter_hash(voter_data)
+                    
+                    # Check blockchain for duplicate vote
+                    if blockchain_client.has_voter_voted(voter_hash):
+                        return JsonResponse({
+                            'success': False,
+                            'message': 'Vote already recorded on blockchain. Duplicate voting detected.'
+                        })
+                    
+                    # Check if voting session is active
+                    active_session = VotingSession.objects.filter(
+                        is_active=True,
+                        start_time__lte=timezone.now(),
+                        end_time__gte=timezone.now()
+                    ).first()
+                    
+                    if not active_session:
+                        return JsonResponse({
+                            'success': False,
+                            'message': 'No active voting session found'
+                        })
+                    
+                    # Start database transaction
+                    with transaction.atomic():
+                        # Cast vote on blockchain
+                        logger.info(f"Attempting to cast vote for voter {voter.id} to party {party.party_id}")
+                        blockchain_result = blockchain_client.cast_vote_on_blockchain(
+                            voter_hash, party.party_id  # Use party_id (string) for blockchain
+                        )
+                        
+                        logger.info(f"Blockchain result: {blockchain_result}")
+                        
+                        if not blockchain_result.get('success'):
+                            logger.error(f"Blockchain vote failed: {blockchain_result.get('message')}")
+                            return JsonResponse({
+                                'success': False,
+                                'message': f"Blockchain vote failed: {blockchain_result.get('message', 'Unknown error')}"
+                            })
+                        
+                        # Create vote record in database
+                        logger.info(f"Creating vote record for voter {voter.id} and party {party.id}")
+                        try:
+                            vote = Vote.objects.create(
+                                voter=voter,
+                                political_party=party,
+                                blockchain_hash=blockchain_result.get('transaction_hash'),
+                                blockchain_block_number=blockchain_result.get('block_number'),
+                                ip_address=self.get_client_ip(request)
+                            )
+                            logger.info(f"Vote record created successfully: {vote.id}")
+                        except Exception as e:
+                            logger.error(f"Error creating vote record: {e}")
+                            raise e
+                        
+                        logger.info(f"Vote record created in database: {vote.id}")
+                        
+                        # Update voter status
+                        voter.has_voted = True
+                        voter.voted_at = timezone.now()
+                        voter.save()
+                        
+                        logger.info(f"Voter status updated: {voter.id}")
+                        
+                        # Create blockchain vote record
+                        try:
+                            vote_record = blockchain_client.create_vote_record(
+                                voter_hash,
+                                party.party_id,  # Use party_id (string) for blockchain
+                                blockchain_result.get('transaction_hash')
+                            )
+                            logger.info(f"Blockchain vote record created: {vote_record}")
+                        except Exception as e:
+                            logger.warning(f"Failed to create blockchain vote record: {e}")
+                        
+                        # Clear verification session
+                        request.session.pop('verified_voter_email', None)
+                        request.session.pop('verification_timestamp', None)
+                        
+                        return JsonResponse({
+                            'success': True,
+                            'message': 'Vote cast successfully!',
+                            'vote_id': str(vote.id),
+                            'blockchain_hash': blockchain_result.get('transaction_hash'),
+                            'timestamp': vote.voted_at.isoformat(),
+                            'party_name': party.party_name,
+                            'blockchain_message': blockchain_result.get('message', '')
+                        })
+                        
+                except Exception as e:
+                    logger.error(f"Error casting vote: {e}")
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'An error occurred while casting your vote. Please try again.'
                     })
             
             else:
@@ -774,269 +938,97 @@ class VoterProfileView(View):
                 'success': False,
                 'message': 'An error occurred. Please try again.'
             })
-
-class CastVoteView(View):
-    """Handle vote casting"""
     
-    def get(self, request):
-        """Show voting interface with political parties"""
-        try:
-            # Check if voter is fully verified
-            verified_voter_id = request.session.get('verified_voter_id')
-            email_verified = request.session.get('email_verified', False)
-            
-            if not verified_voter_id or not email_verified:
-                messages.error(request, 'Please complete verification first')
-                return redirect('voting:voter_profile')
-            
-            # Get voter details
-            try:
-                voter = Voter.objects.get(id=verified_voter_id, is_active=True)
-            except Voter.DoesNotExist:
-                messages.error(request, 'Voter not found')
-                return redirect('voting:aadhaar_verification')
-            
-            # Check if voter has already voted
-            if voter.has_voted:
-                messages.warning(request, 'You have already cast your vote')
-                return redirect('voting:home')
-            
-            # Check if there's an active voting session
-            active_session = VotingSession.objects.filter(
-                is_active=True,
-                start_time__lte=timezone.now(),
-                end_time__gte=timezone.now()
-            ).first()
-            
-            if not active_session:
-                messages.error(request, 'No active voting session')
-                return redirect('voting:home')
-            
-            # Get available political parties
-            political_parties = PoliticalParty.objects.filter(is_active=True).order_by('party_name')
-            
-            context = {
-                'title': 'Cast Your Vote',
-                'voter': voter,
-                'political_parties': political_parties,
-                'active_session': active_session
-            }
-            
-            return render(request, 'voting/cast_vote.html', context)
-            
-        except Exception as e:
-            logger.error(f"Error showing voting interface: {e}")
-            messages.error(request, 'An error occurred while loading voting interface')
-            return redirect('voting:home')
-    
-    @method_decorator(csrf_exempt)
-    def post(self, request):
-        """Cast a vote"""
-        try:
-            # Check if voter is verified (either through email or Aadhaar)
-            verified_voter_id = request.session.get('verified_voter_id')
-            aadhaar_verified = request.session.get('aadhaar_verified', False)
-            email_verified = request.session.get('email_verified', False)
-            
-            if not verified_voter_id or not (aadhaar_verified or email_verified):
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Please verify your identity first'
-                })
-            
-            data = json.loads(request.body)
-            party_id = data.get('party_id')
-            blockchain_hash = data.get('blockchain_hash')
-            blockchain_block = data.get('blockchain_block')
-            voting_method = data.get('voting_method', 'traditional')  # 'blockchain' or 'traditional'
-            
-            if not party_id:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Party selection is required'
-                })
-            
-            # Get voter and party
-            try:
-                voter = Voter.objects.get(id=verified_voter_id, is_active=True)
-                party = PoliticalParty.objects.get(id=party_id, is_active=True)
-            except (Voter.DoesNotExist, PoliticalParty.DoesNotExist):
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Invalid voter or party'
-                })
-            
-            # Check if voter has already voted
-            if voter.has_voted:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'You have already cast your vote'
-                })
-            
-            # Check if there's an active voting session
-            active_session = VotingSession.objects.filter(
-                is_active=True,
-                start_time__lte=timezone.now(),
-                end_time__gte=timezone.now()
-            ).first()
-            
-            if not active_session:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'No active voting session'
-                })
-            
-            # Process vote with database transaction
-            with transaction.atomic():
-                # Create vote record
-                vote = Vote.objects.create(
-                    voter=voter,
-                    political_party=party,
-                    voting_session=active_session,
-                    timestamp=timezone.now()
-                )
-                
-                # Mark voter as voted
-                voter.has_voted = True
-                voter.vote_timestamp = timezone.now()
-                voter.save()
-                
-                # Generate voter hash for blockchain
-                voter_data = {
-                    'id': str(voter.id),
-                    'email': voter.email,
-                    'aadhaar_number': voter.aadhaar_number
-                }
-                voter_hash = blockchain_client.generate_voter_hash(voter_data) if blockchain_client else None
-                
-                # Handle blockchain voting
-                blockchain_tx_hash = None
-                blockchain_block_number = None
-                
-                if voting_method == 'blockchain' and blockchain_hash:
-                    # Vote was cast through MetaMask, use provided blockchain data
-                    blockchain_tx_hash = blockchain_hash
-                    blockchain_block_number = blockchain_block
-                    
-                    # Create blockchain vote record
-                    try:
-                        VoteRecord.objects.create(
-                            voter_hash=voter_hash or f"voter_{voter.id}",
-                            party_id=str(party.id),
-                            transaction_hash=blockchain_tx_hash,
-                            block_number=blockchain_block_number,
-                            timestamp=timezone.now()
-                        )
-                    except Exception as e:
-                        logger.error(f"Failed to create blockchain vote record: {e}")
-                        
-                elif blockchain_client and voter_hash:
-                    # Traditional blockchain recording (fallback)
-                    try:
-                        vote_record = blockchain_client.create_vote_record(
-                            voter_hash, str(party.id), f"simulated_tx_{vote.id}"
-                        )
-                        if vote_record:
-                            blockchain_tx_hash = vote_record.transaction_hash
-                    except Exception as e:
-                        logger.error(f"Blockchain vote recording failed: {e}")
-                
-                # Update vote with blockchain information
-                if blockchain_tx_hash:
-                    vote.blockchain_hash = blockchain_tx_hash
-                    if blockchain_block_number:
-                        vote.blockchain_block_number = blockchain_block_number
-                    vote.save()
-                
-                # Sync with Supabase (commented out - module not available)
-                # if supabase_client:
-                #     try:
-                #         supabase_client.create_vote({
-                #             'id': str(vote.id),
-                #             'voter_id': str(voter.id),
-                #             'party_id': str(party.id),
-                #             'session_id': str(active_session.id),
-                #             'timestamp': vote.timestamp.isoformat(),
-                #             'blockchain_hash': blockchain_tx_hash
-                #         })
-                #     except Exception as e:
-                #         logger.error(f"Supabase sync failed: {e}")
-                
-                # Clear session data
-                request.session.pop('verified_voter_id', None)
-                request.session.pop('pending_voter_id', None)
-                request.session.pop('verification_token', None)
-                
-                return JsonResponse({
-                    'success': True,
-                    'message': f'Vote cast successfully for {party.party_name}',
-                    'vote_id': str(vote.id),
-                    'blockchain_hash': blockchain_tx_hash,
-                    'blockchain_block': blockchain_block_number,
-                    'voting_method': voting_method,
-                    'timestamp': vote.timestamp.isoformat()
-                })
-                
-        except json.JSONDecodeError:
-            return JsonResponse({
-                'success': False,
-                'message': 'Invalid request format'
-            })
-        except Exception as e:
-            logger.error(f"Error casting vote: {e}")
-            return JsonResponse({
-                'success': False,
-                'message': 'An error occurred while casting your vote'
-            })
+    def get_client_ip(self, request):
+        """Get client IP address"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
 
 class VotingResultsView(View):
     """Display voting results"""
     
     def get(self, request):
         """Show voting results"""
-        # Check if there are any completed sessions
-        completed_sessions = VotingSession.objects.filter(
-            end_time__lt=timezone.now()
-        ).order_by('-end_time')
-        
-        if not completed_sessions.exists():
-            return render(request, 'voting/no_results.html')
-        
-        # Get latest completed session
-        latest_session = completed_sessions.first()
-        
-        # Get vote counts by party
-        vote_counts = Vote.objects.filter(
-            voting_session=latest_session
-        ).values(
-            'political_party__name',
-            'political_party__id'
-        ).annotate(
-            vote_count=models.Count('id')
-        ).order_by('-vote_count')
-        
-        total_votes = Vote.objects.filter(voting_session=latest_session).count()
-        total_voters = Voter.objects.filter(is_active=True).count()
-        
-        # Calculate percentages
-        results = []
-        for item in vote_counts:
-            percentage = (item['vote_count'] / total_votes * 100) if total_votes > 0 else 0
-            results.append({
-                'party_name': item['political_party__name'],
-                'vote_count': item['vote_count'],
-                'percentage': round(percentage, 2)
-            })
-        
-        context = {
-            'session': latest_session,
-            'results': results,
-            'total_votes': total_votes,
-            'total_voters': total_voters,
-            'turnout_percentage': round((total_votes / total_voters * 100), 2) if total_voters > 0 else 0
-        }
-        
-        return render(request, 'voting/results.html', context)
+        try:
+            # Get the latest or active voting session
+            active_session = VotingSession.objects.filter(is_active=True).first()
+            latest_session = VotingSession.objects.order_by('-created_at').first()
+            session = active_session or latest_session
+            
+            # Get all votes (since Vote model doesn't have voting_session field)
+            vote_counts = Vote.objects.filter(
+                is_valid=True
+            ).values(
+                'political_party__party_name',
+                'political_party__party_id',
+                'political_party__id'
+            ).annotate(
+                vote_count=models.Count('id')
+            ).order_by('-vote_count')
+            
+            # Get total counts
+            total_votes = Vote.objects.filter(is_valid=True).count()
+            total_voters = Voter.objects.filter(is_active=True).count()
+            
+            # If no votes yet, show all parties with 0 votes
+            if not vote_counts.exists():
+                all_parties = PoliticalParty.objects.filter(is_active=True)
+                vote_counts = []
+                for party in all_parties:
+                    vote_counts.append({
+                        'political_party__party_name': party.party_name,
+                        'political_party__party_id': party.party_id,
+                        'political_party__id': party.id,
+                        'vote_count': 0
+                    })
+            
+            # Calculate percentages and prepare results
+            results = []
+            for item in vote_counts:
+                percentage = (item['vote_count'] / total_votes * 100) if total_votes > 0 else 0
+                results.append({
+                    'party_name': item['political_party__party_name'],
+                    'party_id': item['political_party__party_id'],
+                    'vote_count': item['vote_count'],
+                    'percentage': round(percentage, 2)
+                })
+            
+            # Calculate blockchain verified votes
+            blockchain_votes = Vote.objects.filter(
+                is_valid=True,
+                blockchain_hash__isnull=False
+            ).count()
+            
+            context = {
+                'session': session,
+                'results': results,
+                'total_votes': total_votes,
+                'total_voters': total_voters,
+                'blockchain_votes': blockchain_votes,
+                'turnout_percentage': round((total_votes / total_voters * 100), 2) if total_voters > 0 else 0,
+                'blockchain_percentage': round((blockchain_votes / total_votes * 100), 2) if total_votes > 0 else 0
+            }
+            
+            return render(request, 'voting/results.html', context)
+            
+        except Exception as e:
+            logger.error(f"Error loading voting results: {e}")
+            # Return a basic results page with error message
+            context = {
+                'session': None,
+                'results': [],
+                'total_votes': 0,
+                'total_voters': 0,
+                'blockchain_votes': 0,
+                'turnout_percentage': 0,
+                'blockchain_percentage': 0,
+                'error_message': 'Unable to load voting results. Please try again later.'
+            }
+            return render(request, 'voting/results.html', context)
 
 # API Views for AJAX requests
 @require_http_methods(["GET"])
@@ -1699,3 +1691,146 @@ def refresh_verification_session(request):
             'success': False,
             'message': 'Failed to refresh session'
         })
+
+
+class CastVoteView(View):
+    """Handle vote submission with blockchain integration and duplicate prevention"""
+    
+    @method_decorator(csrf_exempt)
+    def post(self, request):
+        """Submit vote to blockchain and database"""
+        try:
+            data = json.loads(request.body)
+            party_id = data.get('party_id')
+            voter_email = request.session.get('verified_voter_email')
+            
+            if not party_id:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Party ID is required'
+                })
+            
+            if not voter_email:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Voter not verified. Please complete verification first.'
+                })
+            
+            # Get voter and party objects
+            try:
+                voter = Voter.objects.get(email=voter_email, is_active=True)
+                # Always try to find party by party_id field (this is what the frontend sends)
+                party = PoliticalParty.objects.get(party_id=party_id, is_active=True)
+            except Voter.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Voter not found'
+                })
+            except PoliticalParty.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Invalid party selection'
+                })
+            
+            # Check if voter has already voted
+            if Vote.objects.filter(voter=voter).exists():
+                return JsonResponse({
+                    'success': False,
+                    'message': 'You have already cast your vote. Multiple voting is not allowed.'
+                })
+            
+            # Generate voter hash for blockchain
+            voter_data = {
+                'id': str(voter.id),
+                'email': voter.email,
+                'aadhaar_number': voter.aadhaar_number
+            }
+            voter_hash = blockchain_client.generate_voter_hash(voter_data)
+            
+            # Check blockchain for duplicate vote
+            if blockchain_client.has_voter_voted(voter_hash):
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Vote already recorded on blockchain. Duplicate voting detected.'
+                })
+            
+            # Check if voting session is active
+            active_session = VotingSession.objects.filter(
+                is_active=True,
+                start_time__lte=timezone.now(),
+                end_time__gte=timezone.now()
+            ).first()
+            
+            if not active_session:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'No active voting session found'
+                })
+            
+            # Start database transaction
+            with transaction.atomic():
+                # Cast vote on blockchain
+                blockchain_result = blockchain_client.cast_vote_on_blockchain(
+                    voter_hash, party.party_id  # Use party_id (string) for blockchain
+                )
+                
+                if not blockchain_result.get('success'):
+                    return JsonResponse({
+                        'success': False,
+                        'message': f"Blockchain vote failed: {blockchain_result.get('message', 'Unknown error')}"
+                    })
+                
+                # Create vote record in database
+                vote = Vote.objects.create(
+                    voter=voter,
+                    political_party=party,
+                    blockchain_hash=blockchain_result.get('transaction_hash'),
+                    blockchain_block_number=blockchain_result.get('block_number'),
+                    ip_address=self.get_client_ip(request)
+                )
+                
+                # Update voter status
+                voter.has_voted = True
+                voter.voted_at = timezone.now()
+                voter.save()
+                
+                # Create blockchain vote record
+                vote_record = blockchain_client.create_vote_record(
+                    voter_hash,
+                    party.party_id,  # Use party_id (string) for blockchain
+                    blockchain_result.get('transaction_hash')
+                )
+                
+                # Clear verification session
+                request.session.pop('verified_voter_email', None)
+                request.session.pop('verification_timestamp', None)
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Vote cast successfully!',
+                    'vote_id': str(vote.id),
+                    'blockchain_hash': blockchain_result.get('transaction_hash'),
+                    'timestamp': vote.voted_at.isoformat(),
+                    'party_name': party.party_name
+                })
+                
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'message': 'Invalid JSON data'
+            })
+        except Exception as e:
+            logger.error(f"Error casting vote: {e}")
+            return JsonResponse({
+                'success': False,
+                'message': 'An error occurred while casting your vote. Please try again.'
+            })
+    
+    def get_client_ip(self, request):
+        """Get client IP address"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip

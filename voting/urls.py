@@ -23,9 +23,6 @@ urlpatterns = [
     # Email verification
     path('verify-email/', views.EmailVerificationView.as_view(), name='email_verification'),
     
-    # Vote casting
-    path('cast-vote/', views.CastVoteView.as_view(), name='cast_vote'),
-    
     # Results
     path('results/', views.VotingResultsView.as_view(), name='results'),
     
@@ -50,6 +47,9 @@ urlpatterns = [
     path('api/resend-verification/', views.resend_verification_email, name='resend_verification'),
     path('api/verification-status/', views.get_verification_status, name='verification_status'),
     path('api/refresh-session/', views.refresh_verification_session, name='refresh_verification_session'),
+    
+    # Vote submission
+    path('cast-vote/', views.CastVoteView.as_view(), name='cast_vote'),
     
     # Image serving endpoints
     # path('party-symbol/<int:party_id>/', views.serve_party_symbol, name='serve_party_symbol'),  # Function not implemented

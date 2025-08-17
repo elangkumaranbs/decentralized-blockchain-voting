@@ -135,6 +135,41 @@ contract VotingContract {
         parties[_partyId].isActive = true;
     }
     
+    // Voting functions
+    function castVote(bytes32 _voterHash, string memory _partyId) 
+        external 
+        votingActive 
+        validParty(_partyId) 
+    {
+        require(!hasVoted[_voterHash], "Voter has already cast a vote");
+        require(_voterHash != bytes32(0), "Invalid voter hash");
+        require(bytes(_partyId).length > 0, "Invalid party ID");
+        
+        // Record the vote
+        hasVoted[_voterHash] = true;
+        votes[_voterHash] = Vote({
+            voterHash: _voterHash,
+            partyId: _partyId,
+            timestamp: block.timestamp,
+            exists: true
+        });
+        
+        // Update party vote count
+        parties[_partyId].voteCount++;
+        
+        // Update total votes
+        totalVotes++;
+        
+        // Update session vote count
+        votingSessions[currentSessionId].totalVotes++;
+        
+        // Add to vote hashes array for enumeration
+        voteHashes.push(_voterHash);
+        
+        // Emit vote event
+        emit VoteCast(_voterHash, _partyId, block.timestamp);
+    }
+    
     // Voting session management
     function startVotingSession(
         string memory _sessionName,
@@ -167,32 +202,6 @@ contract VotingContract {
         votingSessions[currentSessionId].totalVotes = totalVotes;
         
         emit VotingSessionEnded(currentSessionId, block.timestamp);
-    }
-    
-    // Core voting function
-    function castVote(bytes32 _voterHash, string memory _partyId) 
-        external 
-        votingActive 
-        validParty(_partyId) 
-    {
-        require(!hasVoted[_voterHash], "Voter has already voted");
-        require(_voterHash != bytes32(0), "Invalid voter hash");
-        
-        // Record the vote
-        hasVoted[_voterHash] = true;
-        votes[_voterHash] = Vote({
-            voterHash: _voterHash,
-            partyId: _partyId,
-            timestamp: block.timestamp,
-            exists: true
-        });
-        
-        // Update vote counts
-        parties[_partyId].voteCount++;
-        totalVotes++;
-        voteHashes.push(_voterHash);
-        
-        emit VoteCast(_voterHash, _partyId, block.timestamp);
     }
     
     // View functions

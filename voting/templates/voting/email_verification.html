@@ -165,7 +165,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 clearInterval(statusCheckInterval);
                 clearInterval(sessionRefreshInterval);
                 setTimeout(() => {
-                    window.location.href = '{% url "voting:cast_vote" %}';
+                    window.location.href = '{% url "voting:results" %}';
                 }, 1500);
             } else {
                 // Handle specific error cases

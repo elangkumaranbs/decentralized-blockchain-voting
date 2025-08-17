@@ -177,37 +177,13 @@
                     <strong>Important:</strong> You can only vote once. Please review your selection carefully.
                 </div>
                 
-                <!-- Selected Candidate Display -->
-                <div id="selected-candidate-info" class="alert alert-info text-center mb-4" style="display: none;">
-                    <div class="row align-items-center">
-                        <div class="col-md-8">
-                            <h5 class="mb-1">
-                                <i class="fas fa-check-circle me-2"></i>
-                                Selected Candidate: <span id="selected-party-name"></span>
-                            </h5>
-                            <p class="mb-0 text-muted">Click "Cast Vote" to confirm your selection</p>
-                        </div>
-                        <div class="col-md-4">
-                            <button type="button" class="btn btn-success btn-lg" id="cast-selected-vote-btn">
-                                <i class="fas fa-vote-yea me-2"></i>Cast Vote
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                
                 <form id="vote-form">
+                    {% csrf_token %}
                     <div class="row">
                         {% for party in parties %}
                         <div class="col-md-6 mb-4">
-                            <div class="card party-card h-100" data-party-id="{{ party.id }}" data-party-name="{{ party.party_name }}">
-                                <div class="card-body text-center position-relative">
-                                    <!-- Selection Badge -->
-                                    <div class="selection-badge position-absolute top-0 end-0 m-2" style="display: none;">
-                                        <span class="badge bg-success rounded-pill">
-                                            <i class="fas fa-check"></i> Selected
-                                        </span>
-                                    </div>
-                                    
+                            <div class="card party-card h-100">
+                                <div class="card-body text-center">
                                     {% if party.party_symbol_url %}
                                     <img src="{{ party.party_symbol_url }}" alt="{{ party.party_name }}" 
                                          class="img-fluid mb-3" style="max-height: 80px;">
@@ -226,16 +202,13 @@
                                     <p class="card-text text-muted small">{{ party.party_description|truncatewords:15 }}</p>
                                     {% endif %}
                                     
-                                    <!-- Hidden Radio Button -->
-                                    <input class="form-check-input d-none" type="radio" name="party_id" 
-                                           value="{{ party.id }}" id="party-{{ party.id }}">
-                                    
-                                    <!-- Vote Button for this candidate -->
-                                    <div class="candidate-vote-section mt-3">
-                                        <button type="button" class="btn btn-outline-primary btn-lg select-candidate-btn" 
-                                                data-party-id="{{ party.id }}" data-party-name="{{ party.party_name }}">
-                                            <i class="fas fa-hand-pointer me-2"></i>Select This Candidate
-                                        </button>
+                                    <!-- Radio Button -->
+                                    <div class="form-check mt-3">
+                                        <input class="form-check-input" type="radio" name="party_id" 
+                                               value="{{ party.id }}" id="party-{{ party.id }}" style="transform: scale(1.5);">
+                                        <label class="form-check-label fw-bold" for="party-{{ party.id }}">
+                                            Select {{ party.party_name }}
+                                        </label>
                                     </div>
                                 </div>
                             </div>
@@ -243,19 +216,12 @@
                         {% endfor %}
                     </div>
                     
-                    <!-- Traditional Submit Button (hidden by default) -->
-                    <div class="text-center mt-4" id="traditional-vote-section" style="display: none;">
-                        <button type="submit" class="btn btn-success btn-lg" id="cast-vote-btn" disabled>
+                    <!-- Single Vote Button -->
+                    <div class="text-center mt-4">
+                        <button type="submit" class="btn btn-success btn-lg">
                             <i class="fas fa-vote-yea me-2"></i>Cast My Vote
                         </button>
-                        <button type="button" class="btn btn-outline-secondary btn-lg ms-2" onclick="goToStep(2)">
-                            <i class="fas fa-arrow-left me-2"></i>Back
-                        </button>
-                    </div>
-                    
-                    <!-- Navigation -->
-                    <div class="text-center mt-4">
-                        <button type="button" class="btn btn-outline-light btn-lg" onclick="goToStep(2)">
+                        <button type="button" class="btn btn-outline-light btn-lg ms-2" onclick="goToStep(2)">
                             <i class="fas fa-arrow-left me-2"></i>Back to Verification
                         </button>
                     </div>
@@ -303,85 +269,273 @@
 
 {% block extra_css %}
 <style>
-.voting-container {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 20px;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-    color: white;
+/* Enhanced CSS Variables for Consistent Theming */
+:root {
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    --warning-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    --error-gradient: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+    --vote-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    --glass-bg: rgba(255, 255, 255, 0.25);
+    --glass-border: rgba(255, 255, 255, 0.18);
+    --shadow-light: 0 8px 32px rgba(31, 38, 135, 0.37);
+    --shadow-hover: 0 15px 35px rgba(31, 38, 135, 0.5);
+    --border-radius: 16px;
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Global Enhancements */
+body {
+    background: var(--primary-gradient);
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Floating Particles Background */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.1) 2px, transparent 2px),
+        radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
+        radial-gradient(circle at 40% 40%, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+    background-size: 50px 50px, 30px 30px, 70px 70px;
+    animation: float 20s ease-in-out infinite;
+    pointer-events: none;
+    z-index: -1;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    33% { transform: translateY(-10px) rotate(1deg); }
+    66% { transform: translateY(5px) rotate(-1deg); }
+}
+
+/* Enhanced Voting Container */
+.voting-container {
+    background: var(--glass-bg);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    box-shadow: var(--shadow-light);
+    color: white;
+    position: relative;
+    overflow: hidden;
+    margin: 2rem 0;
+}
+
+.voting-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: var(--vote-gradient);
+    border-radius: 24px 24px 0 0;
+}
+
+/* Enhanced Header Section */
+.display-4 {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    font-weight: 800;
+    margin-bottom: 1.5rem;
+    position: relative;
+}
+
+.display-4::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 4px;
+    background: var(--vote-gradient);
+    border-radius: 2px;
+    box-shadow: 0 0 20px rgba(56, 239, 125, 0.6);
+}
+
+/* Enhanced Step Indicator */
 .step-indicator {
     display: flex;
     justify-content: center;
-    margin-bottom: 2rem;
+    margin-bottom: 3rem;
+    position: relative;
+}
+
+.step-indicator::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 15%;
+    right: 15%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    z-index: 1;
 }
 
 .step {
-    width: 60px;
-    height: 60px;
+    width: 70px;
+    height: 70px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.2);
+    background: var(--glass-bg);
+    backdrop-filter: blur(15px);
+    border: 3px solid rgba(255, 255, 255, 0.3);
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 1rem;
-    font-size: 1.5rem;
-    transition: all 0.3s ease;
+    margin: 0 2rem;
+    font-size: 1.8rem;
+    transition: var(--transition);
+    position: relative;
+    z-index: 2;
+    box-shadow: var(--shadow-light);
 }
 
 .step.active {
-    background: rgba(255,255,255,0.9);
+    background: white;
     color: #667eea;
-    transform: scale(1.1);
+    transform: scale(1.2);
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 15px 35px rgba(255, 255, 255, 0.4);
+    animation: stepPulse 2s ease-in-out infinite;
 }
 
+@keyframes stepPulse {
+    0%, 100% { box-shadow: 0 15px 35px rgba(255, 255, 255, 0.4), 0 0 0 0 rgba(255, 255, 255, 0.3); }
+    50% { box-shadow: 0 15px 35px rgba(255, 255, 255, 0.4), 0 0 0 15px rgba(255, 255, 255, 0.1); }
+}
+
+.step.completed {
+    background: var(--vote-gradient);
+    color: white;
+    border-color: rgba(56, 239, 125, 0.8);
+    box-shadow: 0 10px 25px rgba(56, 239, 125, 0.4);
+}
+
+/* Enhanced Verification Steps */
 .verification-step {
     display: none;
+    padding: 2rem;
 }
 
 .verification-step.active {
     display: block;
-    animation: fadeIn 0.5s ease;
+    animation: fadeInUp 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+@keyframes fadeInUp {
+    from { 
+        opacity: 0; 
+        transform: translateY(40px) scale(0.95); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0) scale(1); 
+    }
 }
 
-/* Aadhaar Verification Styles */
+/* Enhanced Aadhaar Verification */
 .aadhaar-verification-container {
-    background: rgba(255,255,255,0.1);
-    border-radius: 15px;
-    padding: 2rem;
-    backdrop-filter: blur(10px);
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--border-radius);
+    padding: 3rem;
+    box-shadow: var(--shadow-light);
+    position: relative;
+    overflow: hidden;
+}
+
+.aadhaar-verification-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+    opacity: 0.3;
+    z-index: -1;
 }
 
 .aadhaar-card-template {
-    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
-    transition: all 0.3s ease;
+    filter: drop-shadow(0 10px 25px rgba(0,0,0,0.3));
+    transition: var(--transition);
+    border-radius: 15px;
 }
 
 .aadhaar-card-template:hover {
-    transform: scale(1.02);
+    transform: scale(1.05) rotateY(5deg);
+    filter: drop-shadow(0 15px 35px rgba(0,0,0,0.4));
 }
 
 .aadhaar-input-section {
-    border-bottom: 1px solid rgba(255,255,255,0.2);
-    padding-bottom: 2rem;
-    margin-bottom: 2rem;
+    border-bottom: 2px solid rgba(255,255,255,0.2);
+    padding-bottom: 3rem;
+    margin-bottom: 3rem;
+    position: relative;
 }
 
+.aadhaar-input-section::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 4px;
+    background: var(--vote-gradient);
+    border-radius: 2px;
+}
+
+/* Enhanced Image Upload */
 .image-upload-section label {
-    background: linear-gradient(135deg, #4CAF50, #45a049);
+    background: var(--vote-gradient);
     border: none;
-    transition: all 0.3s ease;
+    border-radius: 50px;
+    padding: 1.2rem 3rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: var(--transition);
+    box-shadow: 0 8px 25px rgba(17, 153, 142, 0.4);
+    position: relative;
+    overflow: hidden;
+}
+
+.image-upload-section label::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.6s ease;
+}
+
+.image-upload-section label:hover::before {
+    left: 100%;
 }
 
 .image-upload-section label:hover {
-    background: linear-gradient(135deg, #45a049, #4CAF50);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(76, 175, 80, 0.3);
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 12px 35px rgba(17, 153, 142, 0.6);
 }
 
 .manual-input-section {
@@ -595,17 +749,292 @@
     .aadhaar-verification-container {
         padding: 1rem;
     }
+/* Enhanced Form Controls */
+.form-control, .form-select {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    color: white;
+    font-size: 1.1rem;
+    padding: 1rem 1.5rem;
+    transition: var(--transition);
+    box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.form-control::placeholder {
+    color: rgba(255, 255, 255, 0.7);
+    font-style: italic;
+}
+
+.form-control:focus, .form-select:focus {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 
+        inset 0 4px 8px rgba(0, 0, 0, 0.1),
+        0 0 0 0.2rem rgba(255, 255, 255, 0.25),
+        0 8px 25px rgba(255, 255, 255, 0.2);
+    color: white;
+    outline: none;
+}
+
+.form-label {
+    color: white;
+    font-weight: 600;
+    margin-bottom: 0.8rem;
+    font-size: 1.1rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Enhanced Buttons */
+.btn-primary {
+    background: var(--vote-gradient);
+    border: none;
+    border-radius: 50px;
+    padding: 1rem 2.5rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: var(--transition);
+    box-shadow: 0 8px 25px rgba(17, 153, 142, 0.4);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-primary::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.6s ease;
+}
+
+.btn-primary:hover::before {
+    left: 100%;
+}
+
+.btn-primary:hover {
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 12px 35px rgba(17, 153, 142, 0.6);
+    background: var(--vote-gradient);
+    border: none;
+}
+
+.btn-success {
+    background: var(--success-gradient);
+    border: none;
+    border-radius: 50px;
+    padding: 1rem 2.5rem;
+    font-weight: 700;
+    transition: var(--transition);
+    box-shadow: 0 8px 25px rgba(79, 172, 254, 0.4);
+}
+
+.btn-success:hover {
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 12px 35px rgba(79, 172, 254, 0.6);
+    background: var(--success-gradient);
+    border: none;
+}
+
+.btn-outline-primary {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    background: transparent;
+    border-radius: 50px;
+    font-weight: 600;
+    transition: var(--transition);
+}
+
+.btn-outline-primary:hover {
+    background: var(--vote-gradient);
+    border-color: transparent;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(17, 153, 142, 0.4);
+}
+
+.btn-outline-light {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    background: transparent;
+    border-radius: 50px;
+    font-weight: 600;
+    transition: var(--transition);
+}
+
+.btn-outline-light:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: white;
+    transform: translateY(-2px);
+}
+
+/* Enhanced Party Cards */
+.party-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    transition: var(--transition);
+    cursor: pointer;
+    overflow: hidden;
+    position: relative;
+    box-shadow: var(--shadow-light);
+}
+
+.party-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: var(--primary-gradient);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+    transform-origin: left;
+}
+
+.party-card:hover::before {
+    transform: scaleX(1);
+}
+
+.party-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: var(--shadow-hover);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.party-card.selected {
+    background: linear-gradient(135deg, rgba(56, 239, 125, 0.3), rgba(17, 153, 142, 0.3));
+    border-color: rgba(56, 239, 125, 0.6);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 
+        var(--shadow-hover),
+        0 0 30px rgba(56, 239, 125, 0.4);
+}
+
+.party-card.selected::before {
+    background: var(--vote-gradient);
+    transform: scaleX(1);
+}
+
+.party-card .card-title {
+    color: white;
+    font-weight: 700;
+    font-size: 1.3rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.party-card .card-text {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.selection-badge {
+    opacity: 0;
+    transform: scale(0.8);
+    transition: var(--transition);
+}
+
+.party-card.selected .selection-badge {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Enhanced Alert Styles */
+.alert {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--border-radius);
+    color: white;
+    box-shadow: var(--shadow-light);
+}
+
+.alert-success {
+    background: linear-gradient(135deg, rgba(79, 172, 254, 0.3), rgba(0, 242, 254, 0.3));
+    border-color: rgba(79, 172, 254, 0.5);
+}
+
+.alert-danger {
+    background: linear-gradient(135deg, rgba(255, 107, 107, 0.3), rgba(238, 90, 82, 0.3));
+    border-color: rgba(255, 107, 107, 0.5);
+}
+
+/* Enhanced Loading Styles */
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+    border-width: 0.4em;
+}
+
+.modal-content {
+    background: var(--glass-bg);
+    backdrop-filter: blur(25px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    box-shadow: var(--shadow-light);
+    color: white;
+}
+
+/* Success Page Enhancements */
+.text-success {
+    color: #00f2fe !important;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.fas.fa-check-circle {
+    animation: successBounce 0.8s ease-out;
+    filter: drop-shadow(0 4px 8px rgba(0, 242, 254, 0.3));
+}
+
+@keyframes successBounce {
+    0% { transform: scale(0) rotate(45deg); }
+    50% { transform: scale(1.2) rotate(45deg); }
+    100% { transform: scale(1) rotate(45deg); }
+}
+
+/* Responsive Enhancements */
+@media (max-width: 768px) {
+    .step-indicator {
+        margin-bottom: 2rem;
+    }
+    
+    .step {
+        width: 50px;
+        height: 50px;
+        margin: 0 1rem;
+        font-size: 1.3rem;
+    }
+    
+    .party-card {
+        margin-bottom: 1.5rem;
+    }
+    
+    .btn-lg {
+        padding: 0.8rem 2rem;
+        font-size: 1rem;
+    }
+    
+    .display-4 {
+        font-size: 2rem;
+    }
 }
 </style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-let currentStep = 1;
-let selectedPartyId = null;
-
 // Step navigation
 function goToStep(step) {
+    console.log('🔄 Navigating to step:', step);
+    
     // Hide all steps
     document.querySelectorAll('.verification-step').forEach(el => {
         el.classList.remove('active');
@@ -629,8 +1058,18 @@ function goToStep(step) {
         4: 'vote-success'
     };
     
-    document.getElementById(stepElements[step]).classList.add('active');
-    currentStep = step;
+    const targetElement = document.getElementById(stepElements[step]);
+    if (targetElement) {
+        targetElement.classList.add('active');
+        console.log('✅ Successfully showed step:', stepElements[step]);
+    } else {
+        console.error('❌ Could not find step element:', stepElements[step]);
+    }
+    
+    // Scroll to top smoothly
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    console.log('✅ Navigation to step', step, 'completed');
 }
 
 // Aadhaar image upload handler
@@ -818,112 +1257,40 @@ document.getElementById('email-verification-form').addEventListener('submit', as
     }
 });
 
-// Party selection - Enhanced candidate selection
-document.querySelectorAll('.select-candidate-btn').forEach(btn => {
-    btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        
-        const partyId = this.getAttribute('data-party-id');
-        const partyName = this.getAttribute('data-party-name');
-        
-        selectCandidate(partyId, partyName);
-    });
-});
-
-// Enhanced candidate selection function
-function selectCandidate(partyId, partyName) {
-    // Remove selection from all cards
-    document.querySelectorAll('.party-card').forEach(card => {
-        card.classList.remove('selected');
-        const badge = card.querySelector('.selection-badge');
-        const btn = card.querySelector('.select-candidate-btn');
-        
-        if (badge) badge.style.display = 'none';
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-hand-pointer me-2"></i>Select This Candidate';
-            btn.className = 'btn btn-outline-primary btn-lg select-candidate-btn';
-        }
-    });
+// Vote form submission
+document.getElementById('vote-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
     
-    // Clear radio buttons
-    document.querySelectorAll('input[name="party_id"]').forEach(input => input.checked = false);
-    
-    // Select the chosen candidate
-    const selectedCard = document.querySelector(`[data-party-id="${partyId}"]`);
-    if (selectedCard) {
-        selectedCard.classList.add('selected');
-        
-        // Show selection badge
-        const badge = selectedCard.querySelector('.selection-badge');
-        if (badge) badge.style.display = 'block';
-        
-        // Update button text and style
-        const btn = selectedCard.querySelector('.select-candidate-btn');
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-check-circle me-2"></i>Selected';
-            btn.className = 'btn btn-success btn-lg select-candidate-btn';
-        }
-        
-        // Set the radio button
-        const radio = selectedCard.querySelector('input[name="party_id"]');
-        if (radio) radio.checked = true;
-    }
-    
-    // Update selected candidate info section
-    document.getElementById('selected-party-name').textContent = partyName;
-    document.getElementById('selected-candidate-info').style.display = 'block';
-    
-    // Store selection
-    selectedPartyId = partyId;
-    
-    // Enable traditional vote button (backup)
-    document.getElementById('cast-vote-btn').disabled = false;
-    
-    // Scroll to show the selected candidate info
-    document.getElementById('selected-candidate-info').scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'nearest' 
-    });
-}
-
-// Handle voting from the selected candidate info section
-document.getElementById('cast-selected-vote-btn').addEventListener('click', function() {
-    if (selectedPartyId) {
-        castVote();
-    } else {
-        showAlert('Please select a candidate first', 'warning');
-    }
-});
-
-// Enhanced vote casting function
-function castVote() {
-    if (!selectedPartyId) {
-        showAlert('Please select a candidate', 'warning');
+    // Get selected party
+    const selectedParty = document.querySelector('input[name="party_id"]:checked');
+    if (!selectedParty) {
+        showAlert('Please select a candidate before voting', 'warning');
         return;
     }
     
-    // Show confirmation dialog
-    const selectedPartyName = document.getElementById('selected-party-name').textContent;
+    const partyId = selectedParty.value;
+    const partyName = selectedParty.closest('.party-card').querySelector('.card-title').textContent;
     
-    if (confirm(`Are you sure you want to vote for ${selectedPartyName}? This action cannot be undone.`)) {
-        submitVote();
+    // Show confirmation dialog
+    if (confirm(`Are you sure you want to vote for ${partyName}? This action cannot be undone.`)) {
+        await submitVote(partyId);
     }
-}
+});
 
 // Submit vote to server
-async function submitVote() {
+async function submitVote(partyId) {
     const data = {
-        party_id: selectedPartyId
+        party_id: partyId
     };
     
-    showLoading('Casting your vote...');
-    
     try {
-        const response = await fetch('{% url "voting:cast_vote" %}', {
+        showLoading('Submitting your vote...');
+        
+        const response = await fetch('/cast-vote/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
             },
             body: JSON.stringify(data)
         });
@@ -932,39 +1299,35 @@ async function submitVote() {
         hideLoading();
         
         if (result.success) {
-            // Update success page
-            document.getElementById('vote-id').textContent = result.vote_id;
-            document.getElementById('vote-timestamp').textContent = new Date(result.timestamp).toLocaleString();
-            document.getElementById('blockchain-hash').textContent = result.blockchain_hash || 'Processing...';
+            // Show success message with vote details
+            showAlert(`Vote cast successfully for ${result.party_name}!\n\nVote ID: ${result.vote_id}\nBlockchain Hash: ${result.blockchain_hash}\nTimestamp: ${new Date(result.timestamp).toLocaleString()}`, 'success');
             
-            goToStep(4);
+            // Hide voting form and show success state
+            document.getElementById('voting-form').style.display = 'none';
+            document.getElementById('vote-success').style.display = 'block';
+            
+            // Update step indicator
+            document.getElementById('step-3').classList.add('completed');
+            
+            // Disable all voting buttons
+            const voteButtons = document.querySelectorAll('input[name="party_id"]');
+            voteButtons.forEach(button => {
+                button.disabled = true;
+            });
+            
+            // Clear session data
+            sessionStorage.removeItem('verified_voter');
+            
         } else {
             showAlert(result.message, 'danger');
         }
+        
     } catch (error) {
         hideLoading();
-        console.error('Vote casting error:', error);
-        showAlert('An error occurred while casting your vote. Please try again.', 'danger');
+        console.error('Error submitting vote:', error);
+        showAlert('An error occurred while submitting your vote. Please try again.', 'danger');
     }
 }
-
-// Legacy party card click (keep for compatibility)
-document.querySelectorAll('.party-card').forEach(card => {
-    card.addEventListener('click', function(e) {
-        // Only trigger if clicking on card itself, not on buttons
-        if (!e.target.closest('button')) {
-            const partyId = this.getAttribute('data-party-id');
-            const partyName = this.getAttribute('data-party-name');
-            selectCandidate(partyId, partyName);
-        }
-    });
-});
-
-// Vote casting - Enhanced form submission
-document.getElementById('vote-form').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    castVote();
-});
 
 // Utility functions
 function showLoading(message) {
@@ -998,57 +1361,59 @@ function showAlert(message, type) {
 
 // EmailJS OTP sending function
 function sendOTPEmail(emailjsConfig) {
-            return new Promise((resolve, reject) => {
-                console.log('EmailJS Config received:', emailjsConfig);
-                
-                // Check if EmailJS is loaded
-                if (typeof emailjs === 'undefined') {
-                    console.error('EmailJS library not loaded');
-                    reject(new Error('EmailJS library not loaded'));
-                    return;
-                }
-                
-                // Initialize EmailJS with public key
-                try {
-                    emailjs.init(emailjsConfig.public_key);
-                    console.log('EmailJS initialized with public key:', emailjsConfig.public_key);
-                } catch (initError) {
-                    console.error('EmailJS initialization failed:', initError);
-                    reject(initError);
-                    return;
-                }
-                
-                // Prepare template parameters
-                const templateParams = {
-                    to_email: emailjsConfig.to_email || emailjsConfig.template_params?.to_email,
-                    to_name: emailjsConfig.voter_name || emailjsConfig.template_params?.to_name,
-                    verification_code: emailjsConfig.otp_code || emailjsConfig.template_params?.verification_code
-                };
-                
-                console.log('Template params:', templateParams);
-                console.log('Service ID:', emailjsConfig.service_id);
-                console.log('Template ID:', emailjsConfig.template_id);
-                
-                // Send email using EmailJS
-                emailjs.send(
-                    emailjsConfig.service_id,
-                    emailjsConfig.template_id,
-                    templateParams
-                ).then(
-                    function(response) {
-                        console.log('Email sent successfully:', response);
-                        resolve(response);
-                    },
-                    function(error) {
-                        console.error('Email sending failed:', error);
-                        reject(error);
-                    }
-                );
-            });
+    return new Promise((resolve, reject) => {
+        console.log('EmailJS Config received:', emailjsConfig);
+        
+        // Check if EmailJS is loaded
+        if (typeof emailjs === 'undefined') {
+            console.error('EmailJS library not loaded');
+            reject(new Error('EmailJS library not loaded'));
+            return;
         }
+        
+        // Initialize EmailJS with public key
+        try {
+            emailjs.init(emailjsConfig.public_key);
+            console.log('EmailJS initialized with public key:', emailjsConfig.public_key);
+        } catch (initError) {
+            console.error('EmailJS initialization failed:', initError);
+            reject(initError);
+            return;
+        }
+        
+        // Prepare template parameters
+        const templateParams = {
+            to_email: emailjsConfig.to_email || emailjsConfig.template_params?.to_email,
+            to_name: emailjsConfig.voter_name || emailjsConfig.template_params?.to_name,
+            verification_code: emailjsConfig.otp_code || emailjsConfig.template_params?.verification_code
+        };
+        
+        console.log('Template params:', templateParams);
+        console.log('Service ID:', emailjsConfig.service_id);
+        console.log('Template ID:', emailjsConfig.template_id);
+        
+        // Send email using EmailJS
+        emailjs.send(
+            emailjsConfig.service_id,
+            emailjsConfig.template_id,
+            templateParams
+        ).then(
+            function(response) {
+                console.log('Email sent successfully:', response);
+                resolve(response);
+            },
+            function(error) {
+                console.error('Email sending failed:', error);
+                reject(error);
+            }
+        );
+    });
+}
 
 // Check for verified voter data on page load
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Page loaded - initializing voting system');
+    
     // Check if user came from email verification
     const verifiedVoter = sessionStorage.getItem('verified_voter');
     if (verifiedVoter) {
@@ -1068,6 +1433,8 @@ document.addEventListener('DOMContentLoaded', function() {
             sessionStorage.removeItem('verified_voter');
         }
     }
+    
+    console.log('✅ Voting system initialized');
 });
 
 </script>
