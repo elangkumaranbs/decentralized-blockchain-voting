@@ -1,0 +1,330 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block title %}Voter Details - Blockchain Voting System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .voter-details-container {
+        max-width: 800px;
+        margin: 40px auto;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+    
+    .voter-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+    }
+    
+    .voter-header h2 {
+        margin: 0;
+        font-weight: bold;
+    }
+    
+    .voter-content {
+        padding: 40px;
+    }
+    
+    .voter-info-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 30px;
+        margin-bottom: 20px;
+    }
+    
+    .voter-info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .voter-info-row:last-child {
+        border-bottom: none;
+    }
+    
+    .info-label {
+        font-weight: 600;
+        color: #495057;
+        text-transform: uppercase;
+        font-size: 0.9rem;
+        letter-spacing: 0.5px;
+    }
+    
+    .info-value {
+        font-size: 1.1rem;
+        color: #212529;
+        font-weight: 500;
+    }
+    
+    .profile-section {
+        display: flex;
+        gap: 30px;
+        align-items: flex-start;
+    }
+    
+    .profile-image {
+        flex-shrink: 0;
+    }
+    
+    .profile-image img {
+        width: 150px;
+        height: 150px;
+        border-radius: 10px;
+        object-fit: cover;
+        border: 3px solid #e9ecef;
+    }
+    
+    .profile-placeholder {
+        width: 150px;
+        height: 150px;
+        background: #e9ecef;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #6c757d;
+        font-size: 3rem;
+    }
+    
+    .profile-info {
+        flex: 1;
+    }
+    
+    .email-verification {
+        background: linear-gradient(45deg, #e91e63, #9c27b0);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 20px 0;
+        text-align: center;
+    }
+    
+    .email-verification h4 {
+        margin: 0 0 10px 0;
+        font-weight: bold;
+    }
+    
+    .email-verification p {
+        margin: 5px 0;
+        opacity: 0.9;
+    }
+    
+    .verification-actions {
+        margin-top: 15px;
+    }
+    
+    .btn-verify {
+        background: rgba(255, 255, 255, 0.2);
+        border: 2px solid white;
+        color: white;
+        padding: 8px 20px;
+        border-radius: 25px;
+        margin: 0 5px;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-verify:hover {
+        background: white;
+        color: #e91e63;
+    }
+    
+    .vote-button {
+        background: linear-gradient(45deg, #28a745, #20c997);
+        border: none;
+        color: white;
+        padding: 15px 40px;
+        border-radius: 25px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        width: 100%;
+        margin-top: 20px;
+        transition: all 0.3s ease;
+    }
+    
+    .vote-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(40, 167, 69, 0.3);
+        color: white;
+    }
+    
+    .vote-button:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+    
+    .status-badge {
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .status-verified {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-pending {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .status-rejected {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .aadhaar-number {
+        font-family: 'Courier New', monospace;
+        font-size: 1.2rem;
+        letter-spacing: 2px;
+        color: #007bff;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="voter-details-container">
+    <div class="voter-header">
+        <h2><i class="fas fa-user-check me-2"></i>Voter Details</h2>
+        <p class="mb-0">Verified Voter Information</p>
+    </div>
+    
+    <div class="voter-content">
+        <div class="profile-section">
+            <div class="profile-image">
+                {% if voter.profile_picture %}
+                    <img src="{{ voter.profile_picture.url }}" alt="{{ voter.full_name }}">
+                {% else %}
+                    <div class="profile-placeholder">
+                        <i class="fas fa-user"></i>
+                    </div>
+                {% endif %}
+            </div>
+            
+            <div class="profile-info">
+                <div class="voter-info-card">
+                    <div class="voter-info-row">
+                        <span class="info-label">Aadhaar No.:</span>
+                        <span class="info-value aadhaar-number">{{ voter.aadhaar_number }}</span>
+                    </div>
+                    
+                    <div class="voter-info-row">
+                        <span class="info-label">Name:</span>
+                        <span class="info-value">{{ voter.full_name }}</span>
+                    </div>
+                    
+                    <div class="voter-info-row">
+                        <span class="info-label">DOB:</span>
+                        <span class="info-value">{{ voter.date_of_birth|date:"F j, Y" }}</span>
+                    </div>
+                    
+                    <div class="voter-info-row">
+                        <span class="info-label">Phone No.:</span>
+                        <span class="info-value">{{ voter.phone_number|default:"Not provided" }}</span>
+                    </div>
+                    
+                    <div class="voter-info-row">
+                        <span class="info-label">Region:</span>
+                        <span class="info-value">{{ voter.region|default:"Not specified" }}</span>
+                    </div>
+                    
+                    <div class="voter-info-row">
+                        <span class="info-label">Verification Status:</span>
+                        <span class="info-value">
+                            <span class="status-badge status-{{ voter.verification_status }}">
+                                {{ voter.get_verification_status_display }}
+                            </span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% if not voter.email_verified %}
+        <div class="email-verification">
+            <h4><i class="fas fa-envelope me-2"></i>Associated Email ID:</h4>
+            <p><strong>{{ voter.email }}</strong></p>
+            <p>(Key will be sent to this email id, please verify it)</p>
+            <p class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i>Please verify your Email-ID Key will be sent to this Email-ID.</p>
+            
+            <div class="verification-actions">
+                <button class="btn btn-verify" onclick="changeEmail()">Change</button>
+                <button class="btn btn-verify" onclick="sendOTP()">Send OTP</button>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if voter.email_verified and voter.verification_status == 'verified' %}
+        <button class="btn vote-button" onclick="proceedToVote()" {% if voter.has_voted %}disabled{% endif %}>
+            {% if voter.has_voted %}
+                <i class="fas fa-check-circle me-2"></i>Vote Already Cast
+            {% else %}
+                <i class="fas fa-vote-yea me-2"></i>Vote Now
+            {% endif %}
+        </button>
+        {% else %}
+        <button class="btn vote-button" disabled>
+            <i class="fas fa-lock me-2"></i>Complete Verification to Vote
+        </button>
+        {% endif %}
+        
+        <div class="text-center mt-3">
+            <a href="{% url 'voting:home' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Home
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function changeEmail() {
+    // Redirect to email change form
+    window.location.href = "{% url 'voting:home' %}";
+}
+
+function sendOTP() {
+    // Send OTP for email verification
+    fetch('{% url "voting:send_otp" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            'voter_id': '{{ voter.id }}'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('OTP sent successfully to your email!');
+            window.location.href = "{% url 'voting:verify_email' %}";
+        } else {
+            alert('Error sending OTP: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while sending OTP.');
+    });
+}
+
+function proceedToVote() {
+    window.location.href = "{% url 'voting:home' %}#voting-section";
+}
+</script>
+{% endblock %}

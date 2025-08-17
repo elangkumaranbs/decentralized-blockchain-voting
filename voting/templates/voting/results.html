@@ -1,0 +1,243 @@
+{% extends 'voting/base.html' %}
+
+{% block title %}Voting Results - Decentralized Voting System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="voting-container p-4">
+            <div class="text-center mb-5">
+                <h1 class="display-4 text-primary mb-3">
+                    <i class="fas fa-chart-bar me-3"></i>
+                    Voting Results
+                </h1>
+                <p class="lead text-muted">{{ session.session_name }}</p>
+                <div class="row text-center mt-4">
+                    <div class="col-md-4">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <h3 class="text-primary">{{ total_votes }}</h3>
+                                <p class="text-muted mb-0">Total Votes Cast</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <h3 class="text-success">{{ total_voters }}</h3>
+                                <p class="text-muted mb-0">Registered Voters</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <h3 class="text-info">{{ turnout_percentage }}%</h3>
+                                <p class="text-muted mb-0">Voter Turnout</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% if results %}
+            <!-- Results Chart -->
+            <div class="row mb-5">
+                <div class="col-lg-8 mx-auto">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-chart-pie me-2"></i>
+                                Vote Distribution
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="resultsChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Results -->
+            <div class="row">
+                <div class="col-12">
+                    <h3 class="text-center mb-4">Detailed Results</h3>
+                    {% for result in results %}
+                    <div class="card mb-3 border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-3">
+                                    <h5 class="mb-1">{{ result.party_name }}</h5>
+                                    <small class="text-muted">{{ result.vote_count }} votes</small>
+                                </div>
+                                <div class="col-md-7">
+                                    <div class="progress" style="height: 25px;">
+                                        <div class="progress-bar bg-primary" role="progressbar" 
+                                             style="width: {{ result.percentage }}%" 
+                                             aria-valuenow="{{ result.percentage }}" 
+                                             aria-valuemin="0" aria-valuemax="100">
+                                            {{ result.percentage }}%
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2 text-end">
+                                    <span class="badge bg-primary fs-6">{{ result.percentage }}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Blockchain Verification -->
+            <div class="row mt-5">
+                <div class="col-12">
+                    <div class="card border-0 bg-light">
+                        <div class="card-body text-center">
+                            <h5 class="text-success mb-3">
+                                <i class="fas fa-shield-alt me-2"></i>
+                                Blockchain Verified Results
+                            </h5>
+                            <p class="text-muted mb-3">
+                                These results are secured and verified on the blockchain, ensuring transparency and immutability.
+                            </p>
+                            <div class="row text-center">
+                                <div class="col-md-4">
+                                    <div class="mb-2">
+                                        <i class="fas fa-lock text-success" style="font-size: 2rem;"></i>
+                                    </div>
+                                    <h6>Immutable</h6>
+                                    <small class="text-muted">Results cannot be altered</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-2">
+                                        <i class="fas fa-eye text-primary" style="font-size: 2rem;"></i>
+                                    </div>
+                                    <h6>Transparent</h6>
+                                    <small class="text-muted">Publicly verifiable</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-2">
+                                        <i class="fas fa-users text-info" style="font-size: 2rem;"></i>
+                                    </div>
+                                    <h6>Decentralized</h6>
+                                    <small class="text-muted">No single point of control</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="text-center mt-4">
+                <a href="{% url 'voting:home' %}" class="btn btn-primary btn-lg me-3">
+                    <i class="fas fa-vote-yea me-2"></i>
+                    Vote Now
+                </a>
+                <button class="btn btn-outline-primary btn-lg" onclick="refreshResults()">
+                    <i class="fas fa-sync-alt me-2"></i>
+                    Refresh Results
+                </button>
+            </div>
+            {% else %}
+            <!-- No Results Available -->
+            <div class="text-center">
+                <div class="mb-4">
+                    <i class="fas fa-chart-bar text-muted" style="font-size: 4rem;"></i>
+                </div>
+                <h3 class="text-muted mb-3">No Results Available</h3>
+                <p class="text-muted mb-4">No votes have been cast yet or the voting session is still active.</p>
+                <a href="{% url 'voting:home' %}" class="btn btn-primary btn-lg">
+                    <i class="fas fa-vote-yea me-2"></i>
+                    Cast Your Vote
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if results %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Results data
+const resultsData = [
+    {% for result in results %}
+    {
+        party: '{{ result.party_name }}',
+        votes: {{ result.vote_count }},
+        percentage: {{ result.percentage }}
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+// Chart colors
+const colors = [
+    '#667eea', '#764ba2', '#f093fb', '#f5576c',
+    '#4facfe', '#00f2fe', '#43e97b', '#38f9d7',
+    '#ffecd2', '#fcb69f', '#a8edea', '#fed6e3'
+];
+
+// Create pie chart
+const ctx = document.getElementById('resultsChart').getContext('2d');
+const chart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+        labels: resultsData.map(item => item.party),
+        datasets: [{
+            data: resultsData.map(item => item.votes),
+            backgroundColor: colors.slice(0, resultsData.length),
+            borderWidth: 2,
+            borderColor: '#fff'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    padding: 20,
+                    usePointStyle: true
+                }
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const item = resultsData[context.dataIndex];
+                        return `${item.party}: ${item.votes} votes (${item.percentage}%)`;
+                    }
+                }
+            }
+        },
+        cutout: '50%'
+    }
+});
+
+// Auto-refresh results every 30 seconds
+setInterval(refreshResults, 30000);
+
+function refreshResults() {
+    location.reload();
+}
+
+// Animate progress bars on load
+document.addEventListener('DOMContentLoaded', function() {
+    const progressBars = document.querySelectorAll('.progress-bar');
+    progressBars.forEach(bar => {
+        const width = bar.style.width;
+        bar.style.width = '0%';
+        setTimeout(() => {
+            bar.style.transition = 'width 1s ease-in-out';
+            bar.style.width = width;
+        }, 100);
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,272 @@
+{% extends 'voting/admin/base.html' %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
+        color: white;
+        padding: 25px;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease;
+    }
+    .stats-card:hover {
+        transform: translateY(-5px);
+    }
+    .stats-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .stats-label {
+        font-size: 1rem;
+        opacity: 0.9;
+    }
+    .stats-icon {
+        font-size: 3rem;
+        opacity: 0.3;
+        position: absolute;
+        right: 20px;
+        top: 20px;
+    }
+    .chart-container {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+    }
+    .recent-activity {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    }
+    .activity-item {
+        padding: 15px 0;
+        border-bottom: 1px solid #f0f0f0;
+        display: flex;
+        align-items: center;
+    }
+    .activity-item:last-child {
+        border-bottom: none;
+    }
+    .activity-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 15px;
+        font-size: 1.2rem;
+    }
+    .activity-icon.vote {
+        background: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+    }
+    .activity-icon.user {
+        background: rgba(0, 123, 255, 0.1);
+        color: #007bff;
+    }
+    .activity-icon.party {
+        background: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+    }
+    .activity-content {
+        flex: 1;
+    }
+    .activity-title {
+        font-weight: 600;
+        margin-bottom: 2px;
+    }
+    .activity-time {
+        font-size: 0.85rem;
+        color: #666;
+    }
+    .quick-actions {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    }
+    .action-btn {
+        display: block;
+        width: 100%;
+        padding: 15px;
+        margin-bottom: 10px;
+        border: none;
+        border-radius: 10px;
+        text-decoration: none;
+        text-align: center;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    .action-btn.primary {
+        background: linear-gradient(45deg, #007bff, #0056b3);
+        color: white;
+    }
+    .action-btn.success {
+        background: linear-gradient(45deg, #28a745, #1e7e34);
+        color: white;
+    }
+    .action-btn.warning {
+        background: linear-gradient(45deg, #ffc107, #e0a800);
+        color: #212529;
+    }
+    .action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        text-decoration: none;
+        color: inherit;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0">Dashboard Overview</h1>
+            <p class="text-muted">Welcome to the admin dashboard. Here's a summary of your voting system.</p>
+        </div>
+    </div>
+    
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card position-relative">
+                <div class="stats-number">{{ total_voters }}</div>
+                <div class="stats-label">Total Voters</div>
+                <i class="fas fa-users stats-icon"></i>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card position-relative">
+                <div class="stats-number">{{ total_parties }}</div>
+                <div class="stats-label">Political Parties</div>
+                <i class="fas fa-flag stats-icon"></i>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card position-relative">
+                <div class="stats-number">{{ total_votes }}</div>
+                <div class="stats-label">Total Votes Cast</div>
+                <i class="fas fa-vote-yea stats-icon"></i>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card position-relative">
+                <div class="stats-number">{{ active_sessions }}</div>
+                <div class="stats-label">Active Sessions</div>
+                <i class="fas fa-clock stats-icon"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Voting Results Chart -->
+        <div class="col-xl-8 col-lg-7">
+            <div class="chart-container">
+                <h5 class="mb-4">Voting Results</h5>
+                <canvas id="votingChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="col-xl-4 col-lg-5">
+            <div class="quick-actions">
+                <h5 class="mb-4">Quick Actions</h5>
+                <a href="{% url 'voting:admin_voters' %}" class="action-btn primary">
+                    <i class="fas fa-users me-2"></i>Manage Voters
+                </a>
+                <a href="{% url 'voting:admin_parties' %}" class="action-btn success">
+                    <i class="fas fa-flag me-2"></i>Manage Parties
+                </a>
+                <a href="{% url 'voting:admin_sessions' %}" class="action-btn warning">
+                    <i class="fas fa-calendar me-2"></i>Manage Sessions
+                </a>
+                <a href="{% url 'voting:admin_results' %}" class="action-btn primary">
+                    <i class="fas fa-chart-bar me-2"></i>View Results
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Activity -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="recent-activity">
+                <h5 class="mb-4">Recent Activity</h5>
+                {% if recent_votes %}
+                    {% for vote in recent_votes %}
+                    <div class="activity-item">
+                        <div class="activity-icon vote">
+                            <i class="fas fa-vote-yea"></i>
+                        </div>
+                        <div class="activity-content">
+                            <div class="activity-title">New vote cast for {{ vote.political_party.name }}</div>
+                            <div class="activity-time">{{ vote.timestamp|timesince }} ago</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-inbox fa-3x mb-3"></i>
+                        <p>No recent activity to display</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Voting Results Chart
+    const ctx = document.getElementById('votingChart').getContext('2d');
+    const votingChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ party_names|safe }},
+            datasets: [{
+                data: {{ vote_counts|safe }},
+                backgroundColor: [
+                    '#FF6384',
+                    '#36A2EB',
+                    '#FFCE56',
+                    '#4BC0C0',
+                    '#9966FF',
+                    '#FF9F40',
+                    '#FF6384',
+                    '#C9CBCF'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
+                }
+            }
+        }
+    });
+    
+    // Auto-refresh data every 30 seconds
+    setInterval(function() {
+        location.reload();
+    }, 30000);
+</script>
+{% endblock %}

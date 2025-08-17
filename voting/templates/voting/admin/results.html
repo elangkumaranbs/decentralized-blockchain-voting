@@ -1,0 +1,510 @@
+{% extends 'voting/admin/base.html' %}
+
+{% block title %}Voting Results{% endblock %}
+
+{% block extra_css %}
+<style>
+    .results-container {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+    }
+    .results-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 25px;
+        border-radius: 15px;
+        margin-bottom: 25px;
+        text-align: center;
+    }
+    .results-summary {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 20px;
+    }
+    .summary-stat h3 {
+        font-size: 2rem;
+        margin-bottom: 5px;
+    }
+    .summary-stat p {
+        margin: 0;
+        opacity: 0.9;
+    }
+    .party-result {
+        background: white;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 15px;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+        border-left: 5px solid #667eea;
+        transition: transform 0.3s ease;
+    }
+    .party-result:hover {
+        transform: translateX(5px);
+    }
+    .party-result.winner {
+        border-left-color: #28a745;
+        background: linear-gradient(135deg, rgba(40, 167, 69, 0.05) 0%, rgba(40, 167, 69, 0.02) 100%);
+    }
+    .party-result.second {
+        border-left-color: #ffc107;
+        background: linear-gradient(135deg, rgba(255, 193, 7, 0.05) 0%, rgba(255, 193, 7, 0.02) 100%);
+    }
+    .party-result.third {
+        border-left-color: #fd7e14;
+        background: linear-gradient(135deg, rgba(253, 126, 20, 0.05) 0%, rgba(253, 126, 20, 0.02) 100%);
+    }
+    .party-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 15px;
+    }
+    .party-info {
+        display: flex;
+        align-items: center;
+    }
+    .party-logo {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-right: 15px;
+        border: 3px solid #f0f0f0;
+    }
+    .party-name {
+        font-size: 1.2rem;
+        font-weight: bold;
+        margin: 0;
+        color: #333;
+    }
+    .party-rank {
+        background: #667eea;
+        color: white;
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 0.9rem;
+    }
+    .party-rank.winner {
+        background: #28a745;
+    }
+    .party-rank.second {
+        background: #ffc107;
+        color: #212529;
+    }
+    .party-rank.third {
+        background: #fd7e14;
+    }
+    .vote-stats {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    .vote-count {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #667eea;
+    }
+    .vote-percentage {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #28a745;
+    }
+    .progress-container {
+        margin-bottom: 10px;
+    }
+    .progress {
+        height: 12px;
+        border-radius: 10px;
+        background-color: #f0f0f0;
+        overflow: hidden;
+    }
+    .progress-bar {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        transition: width 1s ease-in-out;
+        border-radius: 10px;
+    }
+    .progress-bar.winner {
+        background: linear-gradient(45deg, #28a745, #20c997);
+    }
+    .progress-bar.second {
+        background: linear-gradient(45deg, #ffc107, #ffca2c);
+    }
+    .progress-bar.third {
+        background: linear-gradient(45deg, #fd7e14, #ff8c42);
+    }
+    .chart-section {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+    }
+    .export-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    .btn-export {
+        padding: 10px 20px;
+        border-radius: 8px;
+        border: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    .btn-export:hover {
+        transform: translateY(-2px);
+    }
+    .no-results {
+        text-align: center;
+        padding: 60px 20px;
+        color: #666;
+    }
+    .no-results i {
+        font-size: 4rem;
+        margin-bottom: 20px;
+        color: #ddd;
+    }
+    .session-selector {
+        background: #f8f9fa;
+        border: 2px solid #e9ecef;
+        border-radius: 10px;
+        padding: 12px 15px;
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+    }
+    .session-selector:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        background: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0">Voting Results</h1>
+            <p class="text-muted">Real-time voting results and analytics.</p>
+        </div>
+    </div>
+    
+    <!-- Session Selector -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <select class="form-control session-selector" id="sessionSelector">
+                <option value="">All Sessions</option>
+                {% for session in voting_sessions %}
+                <option value="{{ session.id }}" {% if session.id == selected_session.id %}selected{% endif %}>
+                    {{ session.title }} ({{ session.start_time|date:"M d, Y" }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6">
+            <div class="export-buttons">
+                <button class="btn btn-primary btn-export" onclick="exportResults('pdf')">
+                    <i class="fas fa-file-pdf me-2"></i>Export PDF
+                </button>
+                <button class="btn btn-success btn-export" onclick="exportResults('excel')">
+                    <i class="fas fa-file-excel me-2"></i>Export Excel
+                </button>
+                <button class="btn btn-info btn-export" onclick="exportResults('csv')">
+                    <i class="fas fa-file-csv me-2"></i>Export CSV
+                </button>
+                <button class="btn btn-warning btn-export" onclick="refreshResults()">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Results Header -->
+    <div class="results-header">
+        <h2>{{ selected_session.title|default:"Overall Voting Results" }}</h2>
+        <p>{{ selected_session.description|default:"Comprehensive results from all voting sessions" }}</p>
+        <div class="results-summary">
+            <div class="summary-stat">
+                <h3>{{ total_votes }}</h3>
+                <p>Total Votes</p>
+            </div>
+            <div class="summary-stat">
+                <h3>{{ total_voters }}</h3>
+                <p>Registered Voters</p>
+            </div>
+            <div class="summary-stat">
+                <h3>{{ turnout_percentage|floatformat:1 }}%</h3>
+                <p>Turnout Rate</p>
+            </div>
+            <div class="summary-stat">
+                <h3>{{ leading_party.name|default:"N/A" }}</h3>
+                <p>Leading Party</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Results List -->
+        <div class="col-lg-8">
+            <div class="results-container">
+                <h5 class="mb-4">Party-wise Results</h5>
+                {% if results %}
+                    {% for result in results %}
+                    <div class="party-result {% if forloop.counter == 1 %}winner{% elif forloop.counter == 2 %}second{% elif forloop.counter == 3 %}third{% endif %}">
+                        <div class="party-header">
+                            <div class="party-info">
+                                {% if result.party.logo %}
+                                    <img src="{{ result.party.logo.url }}" alt="{{ result.party.name }} Logo" class="party-logo">
+                                {% else %}
+                                    <div class="party-logo d-flex align-items-center justify-content-center" style="background: #f0f0f0; color: #666;">
+                                        <i class="fas fa-flag"></i>
+                                    </div>
+                                {% endif %}
+                                <h4 class="party-name">{{ result.party.name }}</h4>
+                            </div>
+                            <div class="party-rank {% if forloop.counter == 1 %}winner{% elif forloop.counter == 2 %}second{% elif forloop.counter == 3 %}third{% endif %}">
+                                #{{ forloop.counter }}
+                            </div>
+                        </div>
+                        
+                        <div class="vote-stats">
+                            <div class="vote-count">{{ result.vote_count }} votes</div>
+                            <div class="vote-percentage">{{ result.percentage|floatformat:2 }}%</div>
+                        </div>
+                        
+                        <div class="progress-container">
+                            <div class="progress">
+                                <div class="progress-bar {% if forloop.counter == 1 %}winner{% elif forloop.counter == 2 %}second{% elif forloop.counter == 3 %}third{% endif %}" 
+                                     style="width: {{ result.percentage }}%" 
+                                     data-percentage="{{ result.percentage }}">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {% if result.party.description %}
+                        <p class="text-muted mb-0">{{ result.party.description|truncatechars:100 }}</p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="no-results">
+                        <i class="fas fa-chart-bar"></i>
+                        <h4>No Results Available</h4>
+                        <p>No votes have been cast yet or no active voting session found.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Charts Section -->
+        <div class="col-lg-4">
+            <!-- Pie Chart -->
+            <div class="chart-section">
+                <h5 class="mb-4">Vote Distribution</h5>
+                <canvas id="pieChart" width="300" height="300"></canvas>
+            </div>
+            
+            <!-- Bar Chart -->
+            <div class="chart-section">
+                <h5 class="mb-4">Vote Comparison</h5>
+                <canvas id="barChart" width="300" height="200"></canvas>
+            </div>
+            
+            <!-- Real-time Stats -->
+            <div class="chart-section">
+                <h5 class="mb-4">Live Statistics</h5>
+                <div class="row text-center">
+                    <div class="col-6 mb-3">
+                        <div class="stat-number" style="font-size: 1.5rem; font-weight: bold; color: #667eea;">{{ votes_last_hour }}</div>
+                        <div class="stat-label" style="font-size: 0.8rem; color: #666;">Votes (Last Hour)</div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="stat-number" style="font-size: 1.5rem; font-weight: bold; color: #28a745;">{{ active_voters }}</div>
+                        <div class="stat-label" style="font-size: 0.8rem; color: #666;">Active Voters</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-number" style="font-size: 1.5rem; font-weight: bold; color: #ffc107;">{{ avg_votes_per_minute|floatformat:1 }}</div>
+                        <div class="stat-label" style="font-size: 0.8rem; color: #666;">Votes/Minute</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-number" style="font-size: 1.5rem; font-weight: bold; color: #dc3545;">{{ remaining_time|default:"N/A" }}</div>
+                        <div class="stat-label" style="font-size: 0.8rem; color: #666;">Time Left</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Session selector change handler
+    document.getElementById('sessionSelector').addEventListener('change', function() {
+        const sessionId = this.value;
+        const url = sessionId ? `?session=${sessionId}` : '';
+        window.location.href = window.location.pathname + url;
+    });
+    
+    // Pie Chart
+    const pieCtx = document.getElementById('pieChart').getContext('2d');
+    const pieChart = new Chart(pieCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ party_names|safe }},
+            datasets: [{
+                data: {{ vote_counts|safe }},
+                backgroundColor: [
+                    '#28a745',
+                    '#ffc107', 
+                    '#fd7e14',
+                    '#667eea',
+                    '#dc3545',
+                    '#6f42c1',
+                    '#20c997',
+                    '#e83e8c'
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        usePointStyle: true,
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const percentage = ((context.parsed / {{ total_votes }}) * 100).toFixed(1);
+                            return context.label + ': ' + context.parsed + ' votes (' + percentage + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Bar Chart
+    const barCtx = document.getElementById('barChart').getContext('2d');
+    const barChart = new Chart(barCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ party_names|safe }},
+            datasets: [{
+                label: 'Votes',
+                data: {{ vote_counts|safe }},
+                backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                borderColor: 'rgba(102, 126, 234, 1)',
+                borderWidth: 1,
+                borderRadius: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                },
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        font: {
+                            size: 10
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Animate progress bars on load
+    window.addEventListener('load', function() {
+        const progressBars = document.querySelectorAll('.progress-bar');
+        progressBars.forEach(bar => {
+            const percentage = bar.dataset.percentage;
+            setTimeout(() => {
+                bar.style.width = percentage + '%';
+            }, 500);
+        });
+    });
+    
+    // Export functions
+    function exportResults(format) {
+        const sessionId = document.getElementById('sessionSelector').value;
+        const url = `/admin/results/export/${format}/${sessionId ? '?session=' + sessionId : ''}`;
+        window.open(url, '_blank');
+    }
+    
+    function refreshResults() {
+        location.reload();
+    }
+    
+    // Auto-refresh every 30 seconds
+    setInterval(function() {
+        // Only refresh if there's an active session
+        {% if selected_session and selected_session.is_active %}
+        location.reload();
+        {% endif %}
+    }, 30000);
+    
+    // Real-time updates using WebSocket (if available)
+    if (typeof WebSocket !== 'undefined') {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = protocol + '//' + window.location.host + '/ws/results/';
+        
+        try {
+            const socket = new WebSocket(wsUrl);
+            
+            socket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.type === 'vote_update') {
+                    // Update charts and statistics
+                    updateCharts(data.results);
+                }
+            };
+            
+            socket.onerror = function(error) {
+                console.log('WebSocket error:', error);
+            };
+        } catch (error) {
+            console.log('WebSocket not available:', error);
+        }
+    }
+    
+    function updateCharts(results) {
+        // Update pie chart
+        pieChart.data.datasets[0].data = results.vote_counts;
+        pieChart.update();
+        
+        // Update bar chart
+        barChart.data.datasets[0].data = results.vote_counts;
+        barChart.update();
+    }
+</script>
+{% endblock %}

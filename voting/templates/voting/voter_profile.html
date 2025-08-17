@@ -1,0 +1,2359 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<div id="voterProfileData" data-email-verified="{% if email_verified %}true{% else %}false{% endif %}" style="display: none;"></div>
+
+<!-- EmailJS SDK -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script type="text/javascript">
+   (function(){
+      emailjs.init("{{ emailjs_public_key|default:'' }}");
+   })();
+</script>
+
+<style>
+    .voter-profile-container {
+        max-width: 900px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+    
+    .voter-details-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid #e2e8f0;
+    }
+    
+    .profile-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 2rem;
+    }
+    
+    .voter-details {
+        flex: 1;
+    }
+    
+    .voter-photo {
+        width: 120px;
+        height: 120px;
+        border-radius: 8px;
+        border: 2px solid #e2e8f0;
+        background: #f8f9fa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 2rem;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .voter-photo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 6px;
+        transition: opacity 0.3s ease;
+    }
+    
+    .voter-photo img.loading {
+        opacity: 0.7;
+    }
+    
+    .voter-photo-placeholder {
+        color: #6b7280;
+        font-size: 2rem;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+    
+    .detail-row {
+        display: flex;
+        margin-bottom: 1rem;
+        align-items: center;
+    }
+    
+    .detail-label {
+        font-weight: 600;
+        color: #374151;
+        width: 140px;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .detail-value {
+        color: #1f2937;
+        font-size: 1.1rem;
+        font-weight: 500;
+    }
+    
+    .email-verification-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        text-align: center;
+    }
+    
+    .selected-candidate-section {
+        margin-bottom: 1.5rem;
+    }
+    
+    .selected-candidate-section .card {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+    }
+    
+    .email-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .email-address {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: white;
+    }
+    
+    .email-buttons {
+        display: flex;
+        gap: 1rem;
+    }
+    
+    .btn-email {
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-email:hover {
+        background: rgba(255, 255, 255, 0.3);
+        color: white;
+        transform: translateY(-1px);
+    }
+    
+    .verification-message {
+        margin: 1rem 0;
+        font-size: 0.95rem;
+        color: rgba(255, 255, 255, 0.9);
+    }
+    
+    .vote-section {
+        text-align: center;
+        margin-top: 2rem;
+    }
+    
+    .btn-vote-now {
+        background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        border: none;
+        color: white;
+        padding: 1rem 3rem;
+        font-size: 1.2rem;
+        font-weight: 600;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);
+    }
+    
+    .btn-vote-now:hover {
+        background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(72, 187, 120, 0.4);
+        color: white;
+    }
+    
+    .btn-vote-now:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+    
+    .otp-verification-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+    }
+    
+    .otp-verification-modal.show {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .otp-modal-content {
+        background: white;
+        padding: 2rem;
+        border-radius: 12px;
+        max-width: 400px;
+        width: 90%;
+        text-align: center;
+        position: relative;
+    }
+    
+    .otp-header h4 {
+        color: #1f2937;
+        font-weight: 700;
+    }
+    
+    .otp-input-section {
+        margin: 1.5rem 0;
+    }
+    
+    .otp-input-section .form-label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+        text-align: left;
+    }
+    
+    .otp-input {
+        width: 100%;
+        padding: 1rem;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        text-align: center;
+        font-size: 1.2rem;
+        letter-spacing: 0.2em;
+        font-weight: 600;
+        transition: border-color 0.3s ease;
+    }
+    
+    .otp-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .otp-buttons {
+        display: flex;
+        gap: 0.5rem;
+        margin: 1.5rem 0;
+    }
+    
+    .btn-verify {
+        flex: 2;
+        padding: 0.75rem 1rem;
+        font-weight: 600;
+    }
+    
+    .otp-resend-section {
+        margin: 1rem 0;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+    
+    .resend-timer {
+        font-size: 0.9rem;
+        color: #6b7280;
+        margin-bottom: 0.5rem;
+    }
+    
+    .countdown {
+        font-weight: 600;
+        color: #ef4444;
+    }
+    
+    .btn-resend {
+        background: none;
+        border: none;
+        color: #667eea;
+        font-weight: 500;
+        text-decoration: underline;
+        cursor: pointer;
+        padding: 0.5rem;
+    }
+    
+    .btn-resend:hover {
+        color: #5a67d8;
+        text-decoration: none;
+    }
+    
+    .btn-resend:disabled {
+        color: #9ca3af;
+        cursor: not-allowed;
+        text-decoration: none;
+    }
+    
+    .otp-help {
+        margin-top: 1rem;
+        padding: 1rem;
+        background: #eff6ff;
+        border-radius: 8px;
+        border-left: 4px solid #3b82f6;
+    }
+    
+    .status-message {
+        margin: 1rem 0;
+        padding: 0.75rem;
+        border-radius: 6px;
+        display: none;
+    }
+    
+    .status-success {
+        background: #d1fae5;
+        color: #065f46;
+        border: 1px solid #a7f3d0;
+    }
+    
+    .status-error {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fca5a5;
+    }
+    
+    .status-warning {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+    
+    /* Candidate Profiles Section */
+    .candidates-section {
+        margin: 2rem 0;
+    }
+    
+    .section-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+    }
+    
+    /* OLD CANDIDATE CARD STYLES - REMOVED FOR MODAL APPROACH
+    .candidates-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .candidate-card {
+        background: white;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1.5rem;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+    
+    .candidate-card:hover {
+        border-color: #667eea;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+    }
+    
+    .candidate-card.selected {
+        border-color: #48bb78;
+        background: #f0fff4;
+        box-shadow: 0 8px 25px rgba(72, 187, 120, 0.15);
+    }
+    
+    .candidate-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .party-symbol {
+        width: 60px;
+        height: 60px;
+        border-radius: 8px;
+        background: #f8f9fa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+        border: 2px solid #e5e7eb;
+    }
+    
+    .party-symbol img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 6px;
+    }
+    
+    .party-symbol i {
+        font-size: 1.5rem;
+        color: #6b7280;
+    }
+    
+    .party-info {
+        flex: 1;
+    }
+    
+    .party-name {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 0.5rem;
+        line-height: 1.2;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .party-id-badge {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0.2rem 0.6rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+        min-width: 40px;
+        text-align: center;
+    }
+    
+    .candidate-name {
+        font-size: 1rem;
+        color: #667eea;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+    }
+    
+    .candidate-name i {
+        color: #48bb78;
+    }
+    
+    .party-description {
+        color: #6b7280;
+        font-size: 0.9rem;
+        margin: 0;
+        line-height: 1.4;
+    }
+    
+    .badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    
+    .badge-success {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    
+    .badge-secondary {
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+    
+    .candidate-details {
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+    
+    .candidate-details .detail-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .candidate-details .detail-item:last-child {
+        margin-bottom: 0;
+    }
+    
+    .candidate-details .detail-label {
+        font-weight: 600;
+        color: #374151;
+        font-size: 0.9rem;
+    }
+    
+    .candidate-details .detail-value {
+        color: #1f2937;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+    
+    .candidate-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .btn-select-candidate {
+        flex: 1;
+        padding: 0.75rem 1rem;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-select-candidate:hover {
+        background: #5a67d8;
+        transform: translateY(-1px);
+    }
+    
+    .btn-vote-candidate {
+        flex: 1;
+        padding: 0.75rem 1rem;
+        background: #48bb78;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-vote-candidate:hover {
+        background: #38a169;
+        transform: translateY(-1px);
+    }
+    
+    .selected-candidate-info {
+        background: #f0fff4;
+        border: 2px solid #48bb78;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        text-align: center;
+    }
+    
+    .selected-display {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1f2937;
+        margin-top: 0.5rem;
+    }
+    
+    #proceedVoteBtn {
+        background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        border: none;
+        color: white;
+        padding: 1rem 3rem;
+        font-size: 1.2rem;
+        font-weight: 600;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);
+    }
+    
+    #proceedVoteBtn:hover {
+        background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(72, 187, 120, 0.4);
+        color: white;
+    }
+    END OF OLD CANDIDATE CARD STYLES */
+
+    /* Candidate Modal Styles - Enhanced */
+    .candidate-modal-content {
+        max-width: 95vw;
+        max-height: 85vh;
+        width: 1400px;
+        overflow-y: auto;
+        background: #ffffff;
+        border-radius: 20px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        border: none;
+    }
+
+    .modal-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 20px 20px 0 0;
+        text-align: center;
+        position: relative;
+    }
+
+    .modal-header h2 {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: 700;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .modal-header .close-btn {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .modal-header .close-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: scale(1.1);
+    }
+
+    .modal-body {
+        padding: 2rem;
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    }
+
+    .modal-body p {
+        text-align: center;
+        font-size: 1.1rem;
+        color: #4a5568;
+        margin-bottom: 2rem;
+        padding: 1rem;
+        background: white;
+        border-radius: 12px;
+        border-left: 4px solid #667eea;
+    }
+
+    .candidates-grid-modal {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .candidate-card-modal {
+        background: white;
+        border-radius: 20px;
+        border: 3px solid #e2e8f0;
+        padding: 0;
+        cursor: pointer;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .candidate-card-modal:hover {
+        border-color: #667eea;
+        transform: translateY(-5px) scale(1.02);
+        box-shadow: 0 15px 35px rgba(102, 126, 234, 0.2);
+    }
+
+    .candidate-card-modal.selected {
+        border-color: #48bb78;
+        background: linear-gradient(135deg, #f0fff4 0%, #e6fffa 100%);
+        box-shadow: 0 15px 35px rgba(72, 187, 120, 0.25);
+        transform: translateY(-5px) scale(1.02);
+    }
+
+    .candidate-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        text-align: center;
+        position: relative;
+    }
+
+    .party-symbol {
+        width: 80px;
+        height: 80px;
+        background: white;
+        border-radius: 50%;
+        margin: 0 auto 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        border: 3px solid rgba(255, 255, 255, 0.8);
+    }
+
+    .party-symbol img {
+        width: 60px;
+        height: 60px;
+        object-fit: contain;
+        border-radius: 50%;
+        display: block;
+    }
+
+    .party-symbol i {
+        font-size: 2.5rem;
+        color: #667eea;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .party-symbol .fallback-icon {
+        width: 60px;
+        height: 60px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        color: #667eea;
+    }
+
+    .symbol-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 50%;
+        font-weight: 700;
+    }
+
+    .symbol-placeholder i {
+        font-size: 1.2rem;
+        margin-bottom: 2px;
+        color: white;
+    }
+
+    .symbol-placeholder span {
+        font-size: 1rem;
+        font-weight: 700;
+        color: white;
+    }
+
+    .party-info {
+        text-align: center;
+    }
+
+    .party-name {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin: 0 0 0.5rem 0;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .candidate-name {
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+        opacity: 0.95;
+    }
+
+    .party-description {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        margin: 0;
+        font-style: italic;
+    }
+
+    .candidate-details {
+        padding: 1.5rem;
+        background: white;
+    }
+
+    .detail-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .detail-item:last-child {
+        border-bottom: none;
+    }
+
+    .detail-label {
+        font-weight: 600;
+        color: #4a5568;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .detail-label i {
+        color: #667eea;
+        font-size: 1rem;
+        width: 16px;
+        text-align: center;
+    }
+
+    .detail-label::before {
+        display: none;
+    }
+
+    .detail-value {
+        font-weight: 500;
+        color: #2d3748;
+        text-align: right;
+        max-width: 60%;
+    }
+
+    .selection-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, rgba(72, 187, 120, 0.95) 0%, rgba(56, 161, 105, 0.95) 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 700;
+        opacity: 0;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: none;
+        backdrop-filter: blur(2px);
+    }
+
+    .selection-overlay i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        animation: pulse 2s infinite;
+    }
+
+    .selection-overlay span {
+        font-size: 1.2rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .candidate-card-modal:hover .selection-overlay {
+        opacity: 1;
+    }
+
+    .candidate-card-modal.selected .selection-overlay {
+        opacity: 1;
+        background: linear-gradient(135deg, rgba(72, 187, 120, 0.9) 0%, rgba(56, 161, 105, 0.9) 100%);
+    }
+
+    .modal-footer {
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        padding: 1.5rem 2rem;
+        border-radius: 0 0 20px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    .modal-footer .btn {
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .modal-footer .btn-secondary {
+        background: #6c757d;
+        border: none;
+        color: white;
+    }
+
+    .modal-footer .btn-secondary:hover {
+        background: #5a6268;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+    }
+
+    .modal-footer .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        color: white;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .modal-footer .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+    }
+
+    /* Vote Button Styling */
+    .modal-footer .btn-success {
+        background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        border: none;
+        color: white;
+        font-weight: 600;
+        font-size: 1.1em;
+        padding: 12px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
+        transition: all 0.3s ease;
+        min-width: 150px;
+    }
+
+    .modal-footer .btn-success:hover {
+        background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(72, 187, 120, 0.4);
+    }
+
+    .modal-footer .btn-success:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .modal-footer .btn-success:disabled:hover {
+        background: #9ca3af;
+        transform: none;
+        box-shadow: none;
+    }
+
+    /* Enhanced Animation Keyframes */
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .candidate-card-modal {
+        animation: fadeInUp 0.6s ease-out;
+    }
+
+    /* Base Modal Styles - Enhanced Positioning */
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(5px);
+        z-index: 10000;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        margin: auto;
+        position: relative;
+        animation: slideInDown 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @keyframes slideInDown {
+        from {
+            opacity: 0;
+            transform: translateY(-100px) scale(0.9);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+
+    /* Responsive Design Enhancements */
+    @media (max-width: 1200px) {
+        .candidates-grid-modal {
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        }
+        
+        .candidate-modal-content {
+            width: 95vw;
+            max-width: 1100px;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .candidates-grid-modal {
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+        
+        .candidate-modal-content {
+            width: 95vw;
+            max-height: 90vh;
+        }
+        
+        .modal-header h2 {
+            font-size: 1.5rem;
+        }
+        
+        .party-symbol {
+            width: 60px;
+            height: 60px;
+        }
+        
+        .party-symbol img {
+            width: 45px;
+            height: 45px;
+        }
+    }
+
+    /* Vote Button Styling */
+    .modal-footer .btn-success {
+        background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        border: none;
+        color: white;
+        font-weight: 600;
+        font-size: 1.1em;
+        padding: 12px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
+        transition: all 0.3s ease;
+        min-width: 150px;
+    }
+
+    .modal-footer .btn-success:hover {
+        background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(72, 187, 120, 0.4);
+    }
+
+    .modal-footer .btn-success:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .modal-footer .btn-success:disabled:hover {
+        background: #9ca3af;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .candidate-card-modal.selected .selection-overlay {
+        opacity: 1;
+        background: rgba(72, 187, 120, 0.9);
+    }
+
+    .selection-overlay i {
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem;
+        border-top: 1px solid #e2e8f0;
+        background: #f8fafc;
+    }
+
+    @media (max-width: 768px) {
+        .candidate-modal-content {
+            width: 95vw;
+            margin: 20px auto;
+        }
+        
+        .candidates-grid-modal {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* Voting Section Styles */
+    .voting-section {
+        background: linear-gradient(135deg, #f0fff4 0%, #f7fafc 100%);
+        border: 2px solid #48bb78;
+        border-radius: 16px;
+        padding: 2rem;
+        margin-top: 2rem;
+        text-align: center;
+    }
+
+    .selected-candidate-info {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .selected-candidate-display {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #1f2937;
+        margin-top: 1rem;
+    }
+
+    .voting-actions {
+        margin: 2rem 0;
+    }
+
+    .voting-actions .btn {
+        margin: 0.5rem;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+
+    .voting-actions .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Vote Button Section Styles */
+    .vote-button-section {
+        text-align: center;
+        margin: 2rem 0;
+        padding: 2rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-vote-primary {
+        background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        color: white;
+        border: none;
+        padding: 1rem 3rem;
+        font-size: 1.2rem;
+        font-weight: 600;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        box-shadow: 0 4px 15px rgba(72, 187, 120, 0.4);
+    }
+
+    .btn-vote-primary:hover {
+        background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(72, 187, 120, 0.5);
+    }
+
+    .btn-vote-primary:active {
+        transform: translateY(-1px);
+    }
+
+    .vote-help-text {
+        margin-top: 1rem;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .vote-help-text .fas {
+        color: rgba(255, 255, 255, 0.8);
+    }
+</style>
+
+<div class="voter-profile-container">
+    <!-- Page Header -->
+    <div class="text-center mb-4">
+        <h1 class="text-primary mb-2">
+            <i class="fas fa-user-check me-2"></i>
+            Voter Profile Verified
+        </h1>
+        <p class="text-muted">Review your details and proceed to vote</p>
+    </div>
+
+    <!-- Voter Details Card -->
+    <div class="voter-details-card">
+        <div class="profile-header">
+            <div class="voter-details">
+                <div class="detail-row">
+                    <span class="detail-label">Aadhaar No.:</span>
+                    <span class="detail-value">{{ voter.aadhaar_number }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Name:</span>
+                    <span class="detail-value">{{ voter.full_name }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">DOB:</span>
+                    <span class="detail-value">{{ voter.date_of_birth|date:"M j, Y" }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Age:</span>
+                    <span class="detail-value">{{ voter_age }} years</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Constituency:</span>
+                    <span class="detail-value">{{ voter.constituency }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Region:</span>
+                    <span class="detail-value">{{ voter.region }}</span>
+                </div>
+            </div>
+            <div class="voter-photo">
+                <!-- Debug info -->
+                <div style="display: none;">
+                    Voter: {{ voter.full_name }}<br>
+                    Picture Name: {{ voter.profile_picture_name }}<br>
+                    Has Data: {{ voter.profile_picture_data|yesno:"Yes,No" }}<br>
+                    Content Type: {{ voter.profile_picture_content_type }}<br>
+                    Base64 Method: {{ voter.profile_picture_url|yesno:"Available,Not Available" }}<br>
+                </div>
+                
+                {% if voter.profile_picture_url %}
+                    <!-- Display using the base64 URL property -->
+                    <img src="{{ voter.profile_picture_url }}" 
+                         alt="Profile Picture"
+                         title="From Database: {{ voter.full_name }}"
+                         onerror="console.log('Base64 failed for {{ voter.full_name }}'); this.style.display='none'; this.nextElementSibling.style.display='block';">
+                {% elif voter.profile_picture_data and voter.profile_picture_content_type %}
+                    <!-- Fallback with manual base64 construction -->
+                    <img src="data:{{ voter.profile_picture_content_type }};base64,{{ voter.profile_picture_base64 }}" 
+                         alt="Profile Picture"
+                         title="Manual Base64: {{ voter.full_name }}"
+                         onerror="console.log('Manual base64 failed for {{ voter.full_name }}'); this.style.display='none'; this.nextElementSibling.style.display='block';">
+                {% elif voter.profile_picture_name %}
+                    <!-- Display from media file if filename is stored -->
+                    <img src="{{ MEDIA_URL }}profile_pictures/{{ voter.profile_picture_name }}" 
+                         alt="Profile Picture"
+                         title="From File: {{ voter.profile_picture_name }}"
+                         onerror="console.log('File failed for {{ voter.profile_picture_name }}'); this.style.display='none'; this.nextElementSibling.style.display='block';">
+                {% else %}
+                    <!-- Default placeholder -->
+                    <i class="fas fa-user voter-photo-placeholder"></i>
+                {% endif %}
+                
+                <!-- Fallback placeholder (hidden by default, shown on error) -->
+                <i class="fas fa-user voter-photo-placeholder" style="display: none;" title="Default Avatar"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Verification Section -->
+    <div class="email-verification-section">
+        <div class="email-info">
+            <div>
+                <div style="font-size: 1rem; margin-bottom: 0.5rem; opacity: 0.9;">Associated Email ID:</div>
+                <div class="email-address">{{ voter.email }}</div>
+                <div style="font-size: 0.9rem; margin-top: 0.5rem; opacity: 0.8;">
+                    (Verification code will be sent to this email for candidate selection)
+                </div>
+            </div>
+            <div class="email-buttons">
+                <button type="button" class="btn btn-email" onclick="changeEmail()">
+                    Change
+                </button>
+                <button type="button" class="btn btn-email" id="sendOtpBtn" onclick="sendVoteOTP()">
+                    Send OTP
+                </button>
+                <button type="button" class="btn btn-success" onclick="showOTPModal()" style="margin-left: 10px;">
+                    Enter OTP
+                </button>
+            </div>
+        </div>
+        
+        <div class="verification-message" id="verificationMessage">
+            Please verify your Email-ID first. After verification, you can select your candidate.
+        </div>
+        
+        <!-- Vote Button - Hidden until email verification -->
+        <div class="vote-button-section" id="voteButtonSection" style="display: none;">
+            <button type="button" class="btn btn-vote-primary" onclick="showCandidateModal()">
+                <i class="fas fa-vote-yea me-2"></i>
+                Vote Now - Select Your Candidate
+            </button>
+            <div class="vote-help-text">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Click to open candidate selection and cast your vote
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Messages -->
+    <div id="statusMessage" class="status-message"></div>
+
+    <!-- Selected Candidate Section - Shows after email verification and candidate selection -->
+    <div id="selectedCandidateSection" class="selected-candidate-section" style="display: none;">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title text-success">
+                    <i class="fas fa-check-circle me-2"></i>
+                    Candidate Selected
+                </h5>
+                <p class="mb-3">
+                    You have selected: <strong id="selectedCandidateDisplay"></strong>
+                </p>
+                <button type="button" class="btn btn-success btn-lg" id="proceedVoteBtn" onclick="proceedToVote()">
+                    <i class="fas fa-vote-yea me-2"></i>Cast Your Vote
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-lg ms-2" onclick="showCandidateModal()">
+                    <i class="fas fa-edit me-2"></i>Change Selection
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Candidate Profiles Section - Now using modal popup instead -->
+    <div class="candidates-section" id="candidatesSection" style="display: none !important;">
+        <!-- Candidates are now displayed in a modal popup -->
+    </div>
+
+    <!-- Selected Candidate and Voting Section -->
+    <div class="voting-section" id="votingSection" style="display: none;">
+        <div class="selected-candidate-info">
+            <h3 class="text-center mb-3">
+                <i class="fas fa-check-circle text-success me-2"></i>
+                Selected Candidate
+            </h3>
+            <div class="selected-candidate-display" id="selectedCandidateDisplay">
+                <!-- Selected candidate info will be displayed here -->
+            </div>
+        </div>
+        
+        <div class="voting-actions text-center">
+            <button type="button" class="btn btn-warning me-3" onclick="showCandidateModal()">
+                <i class="fas fa-edit me-2"></i>
+                Change Selection
+            </button>
+            <button type="button" class="btn btn-success btn-lg" onclick="proceedToVote()">
+                <i class="fas fa-vote-yea me-2"></i>
+                Cast Your Vote
+            </button>
+        </div>
+        
+        <div class="mt-3 text-center">
+            <small class="text-muted">
+                <i class="fas fa-shield-alt me-1"></i>
+                Your vote is secure and anonymous
+            </small>
+        </div>
+    </div>
+
+<!-- OTP Verification Modal -->
+<div id="otpModal" class="otp-verification-modal">
+    <div class="otp-modal-content">
+        <div class="otp-header">
+            <h4 class="mb-2">
+                <i class="fas fa-key text-primary me-2"></i>
+                Email Verification Required
+            </h4>
+            <p class="text-muted mb-3">
+                We've sent a 6-digit verification code to your email: <strong>{{ voter.email }}</strong>
+                <br>Please enter the code below to proceed with candidate selection.
+            </p>
+        </div>
+        
+        <div class="otp-input-section">
+            <label for="otpInput" class="form-label">Verification Code:</label>
+            <input type="text" id="otpInput" class="otp-input" 
+                   placeholder="Enter 6-digit code" maxlength="6" pattern="[0-9]{6}"
+                   autocomplete="one-time-code">
+        </div>
+        
+        <div class="otp-buttons">
+            <button type="button" class="btn btn-primary btn-verify" onclick="verifyOTP()" id="verifyOtpBtn">
+                <i class="fas fa-check me-1"></i>
+                Verify Code
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="closeOTPModal()">
+                <i class="fas fa-times me-1"></i>
+                Cancel
+            </button>
+        </div>
+        
+        <div id="otpStatusMessage" class="status-message"></div>
+        
+        <div class="otp-resend-section">
+            <div class="resend-timer" id="resendTimer" style="display: none;">
+                You can resend the code in <span id="countdown">60</span> seconds
+            </div>
+            <button type="button" class="btn btn-link btn-resend" id="resendOtpBtn" onclick="resendOTP()">
+                <i class="fas fa-redo me-1"></i>
+                Didn't receive the code? Resend OTP
+            </button>
+        </div>
+        
+        <div class="otp-help">
+            <small class="text-muted">
+                <i class="fas fa-info-circle me-1"></i>
+                The verification code will expire in 15 minutes.
+                <br>Check your spam folder if you don't see the email.
+            </small>
+        </div>
+    </div>
+</div>
+
+<!-- Candidate Selection Modal -->
+<div id="candidateModal" class="modal" style="display: none;">
+    <div class="modal-content candidate-modal-content">
+        <div class="modal-header">
+            <h2>
+                <i class="fas fa-users me-2"></i>
+                Select Your Candidate
+            </h2>
+            <button type="button" class="close-btn" onclick="closeCandidateModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="modal-body">
+            <p class="text-center text-muted mb-4">
+                Review candidate profiles below. Each candidate represents their political party.
+                <br>Select your preferred candidate and party to proceed with voting.
+            </p>
+            
+            <div class="candidates-grid-modal">
+                {% for party in parties %}
+                <div class="candidate-card-modal" data-party-id="{{ party.id }}" onclick="selectCandidate('{{ party.party_name|escapejs }}', '{{ party.id }}')">
+                    <div class="candidate-header">
+                        <div class="party-symbol">
+                            <!-- Debug info -->
+                            <div style="display: none;">
+                                Party ID: {{ party.party_id|default:"N/A" }}<br>
+                                Party: {{ party.party_name }}<br>
+                                Symbol Name: {{ party.party_symbol_name }}<br>
+                                Has Data: {{ party.party_symbol_data|yesno:"Yes,No" }}<br>
+                                Content Type: {{ party.party_symbol_content_type }}<br>
+                            </div>
+                            
+                            {% if party.party_symbol_url %}
+                                <!-- Display using the base64 URL property -->
+                                <img src="{{ party.party_symbol_url }}" 
+                                     alt="{{ party.party_name }} Symbol"
+                                     title="From Database: {{ party.party_name }}"
+                                     onerror="console.log('Base64 failed for {{ party.party_name }}'); this.style.display='none'; this.nextElementSibling.style.display='block';">
+                            {% elif party.party_symbol_data and party.party_symbol_content_type %}
+                                <!-- Fallback with manual base64 construction -->
+                                <img src="data:{{ party.party_symbol_content_type }};base64,{{ party.party_symbol_base64 }}" 
+                                     alt="{{ party.party_name }} Symbol"
+                                     title="From Database: {{ party.party_name }}"
+                                     onerror="console.log('Manual base64 failed for {{ party.party_name }}'); this.style.display='none'; this.nextElementSibling.style.display='block';">
+                            {% elif party.party_symbol_name %}
+                                <!-- Display from media file -->
+                                <img src="{{ MEDIA_URL }}party_symbols/{{ party.party_symbol_name }}" 
+                                     alt="{{ party.party_name }} Symbol"
+                                     title="From File: {{ party.party_symbol_name }}"
+                                     onerror="console.log('File failed for {{ party.party_symbol_name }}'); this.style.display='none'; this.nextElementSibling.style.display='block';">
+                            {% else %}
+                                <!-- Fallback: try common image extensions -->
+                                <img src="{{ MEDIA_URL }}party_symbols/download.jpeg" 
+                                     alt="{{ party.party_name }} Symbol"
+                                     title="Default Image"
+                                     onerror="console.log('Default image failed'); this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                            {% endif %}
+                            
+                            <!-- Final fallback placeholder -->
+                            <div class="symbol-placeholder" style="display: none;">
+                                <i class="fas fa-flag"></i>
+                                <span>{{ party.party_name|first|upper }}</span>
+                            </div>
+                        </div>
+                        <div class="party-info">
+                            <h3 class="party-name">
+                                <span class="party-id-badge">{{ party.party_id|default:"N/A" }}</span>
+                                {{ party.party_name }}
+                            </h3>
+                            <div class="candidate-name">
+                                <i class="fas fa-user me-1"></i>
+                                <strong>{{ party.party_leader|default:"Leader not specified" }}</strong>
+                            </div>
+                            <p class="party-description">{{ party.party_description|default:"" }}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="candidate-details">
+                        <div class="detail-item">
+                            <span class="detail-label">
+                                <i class="fas fa-user-tie"></i>
+                                Party Leader:
+                            </span>
+                            <span class="detail-value">{{ party.party_leader|default:"Not specified" }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">
+                                <i class="fas fa-flag"></i>
+                                Party Name:
+                            </span>
+                            <span class="detail-value">{{ party.party_name }}</span>
+                        </div>
+                        {% if party.party_description %}
+                        <div class="detail-item">
+                            <span class="detail-label">
+                                <i class="fas fa-info-circle"></i>
+                                Description:
+                            </span>
+                            <span class="detail-value">{{ party.party_description }}</span>
+                        </div>
+                        {% endif %}
+                        {% if party.founded_date %}
+                        <div class="detail-item">
+                            <span class="detail-label">
+                                <i class="fas fa-calendar-alt"></i>
+                                Founded:
+                            </span>
+                            <span class="detail-value">{{ party.founded_date|date:"Y" }}</span>
+                        </div>
+                        {% endif %}
+                        <div class="detail-item">
+                            <span class="detail-label">
+                                <i class="fas fa-vote-yea"></i>
+                                Vote For:
+                            </span>
+                            <span class="detail-value" style="color: #667eea; font-weight: 700;">{{ party.party_name }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="selection-overlay">
+                        <i class="fas fa-check-circle"></i>
+                        <span>Click to Select</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeCandidateModal()">
+                <i class="fas fa-times me-1"></i>
+                Cancel
+            </button>
+            <button type="button" class="btn btn-success" id="voteBtn" style="display: none;" onclick="castVote()">
+                <i class="fas fa-vote-yea me-1"></i>
+                Vote for <span id="selectedCandidateNameBtn">Candidate</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+let otpSent = false;
+let emailVerified = false;
+let selectedCandidateId = null;
+let selectedCandidateName = null;
+let resendCountdown = 0;
+let resendTimer = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Get email verification status from page data
+    const dataEl = document.getElementById('voterProfileData');
+    emailVerified = dataEl.dataset.emailVerified === 'true';
+    
+    // Always hide vote button on page load - only show after OTP verification in this session
+    hideVoteButton();
+    
+    // Update vote button state
+    updateVoteButton();
+    
+    // Auto-send OTP if user is not email verified yet
+    if (!emailVerified) {
+        console.log('🔄 Email not verified - automatically sending OTP...');
+        // Wait a moment for page to fully load, then send OTP
+        setTimeout(() => {
+            sendVoteOTP();
+        }, 1000);
+    } else {
+        console.log('✅ Email already verified');
+        showVoteButton(); // Show vote button if already verified
+    }
+});
+
+function startResendCountdown(seconds = 60) {
+    resendCountdown = seconds;
+    const resendBtn = document.getElementById('resendOtpBtn');
+    const resendTimerEl = document.getElementById('resendTimer');
+    const countdownEl = document.getElementById('countdown');
+    
+    resendBtn.disabled = true;
+    resendTimerEl.style.display = 'block';
+    
+    resendTimer = setInterval(() => {
+        resendCountdown--;
+        countdownEl.textContent = resendCountdown;
+        
+        if (resendCountdown <= 0) {
+            clearInterval(resendTimer);
+            resendBtn.disabled = false;
+            resendTimerEl.style.display = 'none';
+            resendBtn.innerHTML = '<i class="fas fa-redo me-1"></i>Resend OTP';
+        }
+    }, 1000);
+}
+
+function resendOTP() {
+    // Call the same function as initial send
+    sendVoteOTP();
+    startResendCountdown(60);
+}
+
+function showCandidatesSection() {
+    // Just show the vote button, don't open modal automatically
+    showVoteButton();
+}
+
+function showVoteButton() {
+    // Show the vote button after email verification
+    document.getElementById('voteButtonSection').style.display = 'block';
+    
+    // Smooth scroll to the vote button
+    setTimeout(() => {
+        document.getElementById('voteButtonSection').scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+        });
+    }, 500);
+}
+
+function hideVoteButton() {
+    // Ensure vote button is hidden
+    document.getElementById('voteButtonSection').style.display = 'none';
+}
+
+function showCandidateModal() {
+    console.log('=== showCandidateModal Function Called ===');
+    
+    const modal = document.getElementById('candidateModal');
+    console.log('Modal element found:', !!modal);
+    
+    if (modal) {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden'; // Prevent background scrolling
+        console.log('✅ Candidate modal displayed');
+        
+        // Also check if candidate cards are present
+        const candidateCards = document.querySelectorAll('.candidate-card-modal');
+        console.log('Found candidate cards in modal:', candidateCards.length);
+        
+        candidateCards.forEach((card, index) => {
+            console.log(`Card ${index + 1}:`, {
+                partyId: card.dataset.partyId,
+                hasOnclick: !!card.onclick,
+                visible: card.style.display !== 'none'
+            });
+        });
+    } else {
+        console.error('❌ Candidate modal not found!');
+    }
+}
+
+function closeCandidateModal() {
+    const modal = document.getElementById('candidateModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    document.body.style.overflow = 'auto'; // Restore scrolling
+    
+    // Clear any selections
+    document.querySelectorAll('.candidate-card-modal').forEach(card => {
+        card.classList.remove('selected');
+    });
+    
+    // Hide vote button safely
+    const voteBtn = document.getElementById('voteBtn');
+    if (voteBtn) {
+        voteBtn.style.display = 'none';
+    }
+    
+    selectedCandidateId = null;
+    selectedCandidateName = null;
+}
+
+function selectCandidate(partyName, partyId) {
+    console.log('=== selectCandidate Function Called ===');
+    console.log('Party Name:', partyName);
+    console.log('Party ID:', partyId);
+    
+    // Clear previous selections
+    const allCards = document.querySelectorAll('.candidate-card-modal');
+    console.log('Found candidate cards:', allCards.length);
+    
+    allCards.forEach(card => {
+        card.classList.remove('selected');
+        console.log('Removed selected class from card:', card.dataset.partyId);
+    });
+    
+    // Select the clicked candidate
+    const clickedCard = document.querySelector(`[data-party-id="${partyId}"]`);
+    console.log('Clicked card found:', !!clickedCard);
+    
+    if (clickedCard) {
+        clickedCard.classList.add('selected');
+        console.log('Added selected class to card for party:', partyId);
+    } else {
+        console.error('Could not find card with party ID:', partyId);
+    }
+    
+    // Store selection
+    selectedCandidateId = partyId;
+    selectedCandidateName = partyName;
+    console.log('Stored selection - ID:', selectedCandidateId, 'Name:', selectedCandidateName);
+    
+    // Show the vote button directly
+    const voteBtnElement = document.getElementById('voteBtn');
+    const selectedCandidateNameElement = document.getElementById('selectedCandidateNameBtn');
+    
+    console.log('Vote button found:', !!voteBtnElement);
+    console.log('Selected candidate name element found:', !!selectedCandidateNameElement);
+    
+    if (selectedCandidateNameElement) {
+        selectedCandidateNameElement.textContent = partyName;
+        console.log('Updated candidate name in button to:', partyName);
+    }
+    
+    if (voteBtnElement) {
+        voteBtnElement.style.display = 'block';
+        console.log('Vote button displayed');
+    }
+    
+    // Show feedback
+    console.log(`✅ Selected: ${partyName}`);
+    
+    console.log('✅ Candidate selection completed successfully');
+}
+
+function castVote() {
+    if (!selectedCandidateId || !selectedCandidateName) {
+        alert('Please select a candidate first.');
+        return;
+    }
+    
+    // Show confirmation dialog
+    const confirmVote = confirm(`Are you sure you want to vote for ${selectedCandidateName}?\n\nThis action cannot be undone.`);
+    
+    if (!confirmVote) {
+        return;
+    }
+    
+    console.log('Casting vote for:', selectedCandidateName, 'ID:', selectedCandidateId);
+    
+    // Disable vote button and show loading state
+    const voteBtn = document.getElementById('voteBtn');
+    voteBtn.disabled = true;
+    voteBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Casting Vote...';
+    
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (!csrfToken) {
+        alert('Security token missing. Please refresh the page.');
+        voteBtn.disabled = false;
+        voteBtn.innerHTML = '<i class="fas fa-vote-yea me-1"></i>Vote for ' + selectedCandidateName;
+        return;
+    }
+    
+    // Send vote to server
+    fetch('{% url "voting:cast_vote" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken.value
+        },
+        body: JSON.stringify({
+            party_id: selectedCandidateId,
+            party_name: selectedCandidateName
+        })
+    })
+    .then(response => {
+        console.log('Vote response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Vote response:', data);
+        if (data.success) {
+            // Vote successful
+            alert(`✅ Vote cast successfully for ${selectedCandidateName}!\n\nThank you for participating in the election.`);
+            
+            // Close modal
+            closeCandidateModal();
+            
+            // Update page to show vote confirmation
+            document.body.innerHTML = `
+                <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+                    <div style="max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <h1 style="color: #28a745; margin-bottom: 20px;">
+                            <i class="fas fa-check-circle" style="margin-right: 10px;"></i>
+                            Vote Cast Successfully!
+                        </h1>
+                        <p style="font-size: 1.2em; margin-bottom: 20px;">
+                            Your vote for <strong>${selectedCandidateName}</strong> has been recorded.
+                        </p>
+                        <p style="color: #6c757d; margin-bottom: 30px;">
+                            Transaction ID: ${data.transaction_id || 'Pending blockchain confirmation'}
+                        </p>
+                        <a href="{% url 'voting:home' %}" style="background: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                            Return to Home
+                        </a>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Vote failed
+            alert(`❌ Failed to cast vote: ${data.error || 'Unknown error occurred'}`);
+            voteBtn.disabled = false;
+            voteBtn.innerHTML = '<i class="fas fa-vote-yea me-1"></i>Vote for ' + selectedCandidateName;
+        }
+    })
+    .catch(error => {
+        console.error('Vote error:', error);
+        alert(`❌ Error casting vote: ${error.message}\n\nPlease try again.`);
+        voteBtn.disabled = false;
+        voteBtn.innerHTML = '<i class="fas fa-vote-yea me-1"></i>Vote for ' + selectedCandidateName;
+    });
+}
+
+function confirmCandidateSelection() {
+    if (!selectedCandidateId || !selectedCandidateName) {
+        alert('Please select a candidate first.');
+        return;
+    }
+    
+    // Close modal
+    closeCandidateModal();
+    
+    // Hide the vote button section since candidate is now selected
+    document.getElementById('voteButtonSection').style.display = 'none';
+    
+    // Update the page to show selection
+    document.getElementById('selectedCandidateDisplay').innerHTML = 
+        `<strong>${selectedCandidateName}</strong> - Selected! Ready to cast your vote.`;
+    
+    // Show voting section
+    document.getElementById('votingSection').style.display = 'block';
+    
+    // Scroll to voting section
+    setTimeout(() => {
+        document.getElementById('votingSection').scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+        });
+    }, 300);
+    
+    // Update status
+    showStatus(`You have selected ${selectedCandidateName}. Click "Cast Vote" to proceed.`, 'success');
+    
+    // Update vote button
+    updateVoteButton();
+}
+
+function voteForCandidate(partyId, partyName) {
+    if (!emailVerified) {
+        showStatus('Please verify your email first before selecting a candidate.', 'warning');
+        return;
+    }
+    
+    selectCandidate(partyName, partyId);
+    // Auto-proceed to voting since email is already verified
+    setTimeout(() => {
+        proceedToVote();
+    }, 1000);
+}
+
+function proceedWithSelectedCandidate() {
+    // This function is no longer used in the new flow
+    // Email verification happens before candidate selection
+    if (!emailVerified) {
+        showStatus('Please verify your email first.', 'error');
+        return;
+    }
+    
+    if (!selectedCandidateId) {
+        showStatus('Please select a candidate first.', 'error');
+        return;
+    }
+    
+    // Store selected candidate and proceed to vote
+    sessionStorage.setItem('selectedCandidateId', selectedCandidateId);
+    sessionStorage.setItem('selectedCandidateName', selectedCandidateName);
+    proceedToVote();
+}
+
+function sendVoteOTP() {
+    console.log('=== sendVoteOTP Function Started ===');
+    
+    // First, show the OTP modal immediately so user can enter OTP
+    showOTPModal();
+    
+    const sendBtn = document.getElementById('sendOtpBtn');
+    const originalText = sendBtn.innerHTML;
+    
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sending...';
+    
+    // Check if CSRF token exists
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (!csrfToken) {
+        console.error('CSRF token not found');
+        showStatus('Security token missing. Please refresh the page.', 'error');
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = originalText;
+        return;
+    }
+    
+    console.log('CSRF token found:', csrfToken.value.substring(0, 10) + '...');
+    
+    // Check EmailJS availability
+    console.log('EmailJS availability check:');
+    console.log('- typeof emailjs:', typeof emailjs);
+    console.log('- emailjs object:', emailjs);
+    
+    // Log request details
+    const requestUrl = '{% url "voting:voter_profile" %}';
+    const requestData = { action: 'send_vote_otp' };
+    
+    console.log('Making fetch request:');
+    console.log('- URL:', requestUrl);
+    console.log('- Data:', requestData);
+    console.log('- CSRF Token:', csrfToken.value.substring(0, 10) + '...');
+    
+    // Use EmailJS to send OTP
+    fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken.value
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => {
+        console.log('=== Fetch Response Received ===');
+        console.log('Response status:', response.status);
+        console.log('Response statusText:', response.statusText);
+        console.log('Response ok:', response.ok);
+        console.log('Response headers:', [...response.headers.entries()]);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('=== Server Response Parsed ===');
+        console.log('Full response data:', JSON.stringify(data, null, 2));
+        
+        if (data.success) {
+            console.log('✅ OTP generation successful');
+            console.log('Email:', data.email);
+            console.log('Voter name:', data.voter_name);
+            console.log('Has EmailJS config:', !!data.emailjs_config);
+            
+            // EmailJS integration - send the actual email
+            if (data.emailjs_config && data.emailjs_config.service_id) {
+                console.log('=== EmailJS Configuration Found ===');
+                console.log('Service ID:', data.emailjs_config.service_id);
+                console.log('Template ID:', data.emailjs_config.template_id);
+                console.log('Public Key:', data.emailjs_config.public_key);
+                console.log('Template Params:', data.emailjs_config.template_params);
+                
+                // Check if emailjs is available
+                if (typeof emailjs === 'undefined') {
+                    console.error('❌ EmailJS library not loaded');
+                    showStatus('Email service not available. Please contact administrator.', 'error');
+                    return;
+                }
+                
+                const templateParams = {
+                    to_name: data.voter_name || 'Voter',
+                    to_email: data.email || '{{ voter.email }}',
+                    verification_code: data.verification_code || 'XXXXXX',
+                    from_name: 'Blockchain Voting System'
+                };
+                
+                console.log('=== Sending Email via EmailJS ===');
+                console.log('Template params:', templateParams);
+                
+                emailjs.send(
+                    data.emailjs_config.service_id,
+                    data.emailjs_config.template_id,
+                    templateParams,
+                    data.emailjs_config.public_key
+                ).then(function(response) {
+                    console.log('✅ EmailJS SUCCESS!');
+                    console.log('EmailJS response:', response);
+                    showStatus('OTP sent successfully to your email! Check your inbox.', 'success');
+                    otpSent = true;
+                    updateVoteButton();
+                    document.getElementById('verificationMessage').textContent = 
+                        'OTP sent to your email. Please verify to proceed with candidate selection.';
+                    
+                    // Automatically show OTP modal for user to enter code
+                    setTimeout(() => {
+                        showOTPModal();
+                        startResendCountdown(60);
+                    }, 1000);
+                    
+                }, function(error) {
+                    console.error('❌ EmailJS Error Details:');
+                    console.error('Error object:', error);
+                    console.error('Error text:', error.text);
+                    console.error('Error status:', error.status);
+                    
+                    // Show OTP directly for testing purposes when EmailJS fails
+                    if (data.verification_code) {
+                        showStatus(`Email service failed. For testing: Your OTP is ${data.verification_code}`, 'warning');
+                        // Also show it in the OTP modal
+                        setTimeout(() => {
+                            const otpStatusMessage = document.getElementById('otpStatusMessage');
+                            if (otpStatusMessage) {
+                                otpStatusMessage.innerHTML = `<div class="alert alert-warning">
+                                    <strong>Testing Mode:</strong> Your OTP is <strong>${data.verification_code}</strong>
+                                    <br><small>Email service temporarily unavailable</small>
+                                </div>`;
+                            }
+                        }, 100);
+                    } else {
+                        showStatus('Email sent via server, but real-time delivery may be delayed.', 'warning');
+                    }
+                    
+                    otpSent = true;
+                    updateVoteButton();
+                    
+                    // Show OTP modal even if EmailJS fails
+                    setTimeout(() => {
+                        showOTPModal();
+                        startResendCountdown(60);
+                    }, 1000);
+                });
+            } else {
+                console.log('⚠️ No EmailJS config provided');
+                console.log('EmailJS config keys:', Object.keys(data.emailjs_config || {}));
+                
+                // Show OTP directly when EmailJS is not configured
+                if (data.verification_code) {
+                    showStatus(`EmailJS not configured. For testing: Your OTP is ${data.verification_code}`, 'info');
+                    // Also show it in the OTP modal
+                    setTimeout(() => {
+                        const otpStatusMessage = document.getElementById('otpStatusMessage');
+                        if (otpStatusMessage) {
+                            otpStatusMessage.innerHTML = `<div class="alert alert-info">
+                                <strong>Testing Mode:</strong> Your OTP is <strong>${data.verification_code}</strong>
+                                <br><small>EmailJS service not configured</small>
+                            </div>`;
+                        }
+                    }, 100);
+                } else {
+                    showStatus('OTP sent successfully! Check your email.', 'success');
+                }
+                
+                otpSent = true;
+                updateVoteButton();
+                document.getElementById('verificationMessage').textContent = 
+                    'OTP sent to your email. Please verify to proceed with candidate selection.';
+                
+                // Show OTP modal for user to enter code
+                setTimeout(() => {
+                    showOTPModal();
+                    startResendCountdown(60);
+                }, 1000);
+            }
+        } else {
+            console.error('❌ Server reported failure:');
+            console.error('Error message:', data.message);
+            showStatus(data.message || 'Failed to send OTP. Please try again.', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('❌ Network/Fetch Error:');
+        console.error('Error object:', error);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        
+        let errorMessage = 'Network error occurred. ';
+        if (error.message.includes('HTTP error')) {
+            errorMessage += 'Server responded with an error. Please try again.';
+        } else if (error.message.includes('Failed to fetch')) {
+            errorMessage += 'Connection failed. Please check your internet connection.';
+        } else {
+            errorMessage += 'Please check your connection and try again.';
+        }
+        
+        showStatus(errorMessage, 'error');
+    })
+    .finally(() => {
+        console.log('=== Request Complete ===');
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = originalText;
+    });
+}
+
+function verifyOTP() {
+    const otpCode = document.getElementById('otpInput').value;
+    
+    if (otpCode.length !== 6) {
+        showOTPStatus('Please enter a complete 6-digit code.', 'error');
+        return;
+    }
+    
+    fetch('{% url "voting:voter_profile" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({
+            action: 'verify_vote_otp',
+            otp_code: otpCode
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showOTPStatus('Email verified successfully!', 'success');
+            emailVerified = true;
+            closeOTPModal();
+            showStatus('Email verified! Click the Vote button to select your candidate.', 'success');
+            
+            // Show vote button instead of automatically opening candidate modal
+            showVoteButton();
+            
+            updateVoteButton();
+            document.getElementById('verificationMessage').textContent = 
+                'Email verified successfully! Click the "Vote Now" button below to select your candidate.';
+            
+            // Update the selected candidate section if candidate was already selected
+            if (selectedCandidateName) {
+                document.getElementById('selectedCandidateDisplay').innerHTML = 
+                    `<strong>${selectedCandidateName}</strong> - Email verified! Ready to cast your vote.`;
+            }
+        } else {
+            showOTPStatus(data.message, 'error');
+            if (data.remaining_attempts !== undefined) {
+                showOTPStatus(`${data.message} (${data.remaining_attempts} attempts remaining)`, 'error');
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showOTPStatus('Verification failed. Please try again.', 'error');
+    });
+}
+
+function proceedToVote() {
+    if (!emailVerified) {
+        if (!otpSent) {
+            showStatus('Please send OTP first by clicking "Send OTP to Vote".', 'warning');
+        } else {
+            showOTPModal();
+        }
+        return;
+    }
+    
+    if (!selectedCandidateId) {
+        showStatus('Please select a candidate first.', 'error');
+        return;
+    }
+    
+    // Ensure we have the selected candidate information
+    if (sessionStorage.getItem('selectedCandidateId')) {
+        showStatus(`Proceeding to vote for ${selectedCandidateName}...`, 'success');
+        setTimeout(() => {
+            window.location.href = '{% url "voting:cast_vote" %}';
+        }, 1000);
+    } else {
+        showStatus('Please select a candidate and verify your email first.', 'error');
+    }
+}
+
+function updateVoteButton() {
+    const voteBtn = document.getElementById('proceedVoteBtn');
+    const selectedSection = document.getElementById('selectedCandidateSection');
+    
+    // Check if elements exist before manipulating them
+    if (!selectedSection) {
+        console.warn('selectedCandidateSection element not found');
+        return;
+    }
+    
+    if (!emailVerified) {
+        // Before email verification - hide the selected candidate section
+        selectedSection.style.display = 'none';
+        return;
+    }
+    
+    // After email verification
+    if (selectedCandidateId) {
+        // Candidate selected and email verified - ready to vote
+        selectedSection.style.display = 'block';
+        
+        // Update the display text
+        const selectedDisplay = document.getElementById('selectedCandidateDisplay');
+        if (selectedDisplay) {
+            selectedDisplay.textContent = selectedCandidateName;
+        }
+        
+        if (voteBtn) {
+            voteBtn.disabled = false;
+            voteBtn.innerHTML = '<i class="fas fa-vote-yea me-2"></i>Cast Your Vote';
+        }
+    } else {
+        // Email verified but no candidate selected yet
+        selectedSection.style.display = 'none';
+    }
+}
+
+function closeOTPModal() {
+    const modal = document.getElementById('otpModal');
+    modal.classList.remove('show');
+    modal.style.display = 'none';
+    document.getElementById('otpInput').value = '';
+    document.getElementById('otpStatusMessage').style.display = 'none';
+    
+    // Clear resend timer
+    if (resendTimer) {
+        clearInterval(resendTimer);
+        resendTimer = null;
+    }
+    document.getElementById('resendTimer').style.display = 'none';
+    document.getElementById('resendOtpBtn').disabled = false;
+}
+
+function showOTPModal() {
+    const modal = document.getElementById('otpModal');
+    const otpInput = document.getElementById('otpInput');
+    
+    // Force display with inline styles
+    modal.style.display = 'flex';
+    modal.style.position = 'fixed';
+    modal.style.top = '0';
+    modal.style.left = '0';
+    modal.style.width = '100%';
+    modal.style.height = '100%';
+    modal.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    modal.style.zIndex = '99999';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    
+    if (otpInput) {
+        setTimeout(() => otpInput.focus(), 100);
+    }
+}
+
+function changeEmail() {
+    // This would typically open a modal to change email
+    // For now, just show a message
+    showStatus('Email change functionality will be implemented soon.', 'warning');
+}
+
+function showStatus(message, type) {
+    const statusEl = document.getElementById('statusMessage');
+    statusEl.className = `status-message status-${type}`;
+    statusEl.textContent = message;
+    statusEl.style.display = 'block';
+    
+    if (type === 'success') {
+        setTimeout(() => {
+            statusEl.style.display = 'none';
+        }, 5000);
+    }
+}
+
+function showOTPStatus(message, type) {
+    const statusEl = document.getElementById('otpStatusMessage');
+    statusEl.className = `status-message status-${type}`;
+    statusEl.textContent = message;
+    statusEl.style.display = 'block';
+}
+
+// Auto-format OTP input
+document.getElementById('otpInput').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 6) value = value.slice(0, 6);
+    e.target.value = value;
+    
+    if (value.length === 6) {
+        // Auto-verify when 6 digits are entered
+        setTimeout(() => verifyOTP(), 500);
+    }
+});
+
+// Close modal when clicking outside
+document.getElementById('otpModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeOTPModal();
+    }
+});
+
+// Profile picture loading and error handling
+document.addEventListener('DOMContentLoaded', function() {
+    const profileImg = document.querySelector('.voter-photo img');
+    const profileContainer = document.querySelector('.voter-photo');
+    
+    if (profileImg) {
+        console.log('Profile picture found:', profileImg.src);
+        
+        profileImg.addEventListener('load', function() {
+            console.log('✅ Profile picture loaded successfully:', this.src);
+            this.classList.remove('loading');
+        });
+        
+        profileImg.addEventListener('error', function() {
+            console.log('❌ Profile picture failed to load:', this.src);
+            console.log('Attempting to show placeholder...');
+            
+            this.style.display = 'none';
+            
+            // Find and show the placeholder
+            const placeholder = profileContainer.querySelector('.voter-photo-placeholder[style*="display: none"]');
+            if (placeholder) {
+                placeholder.style.display = 'flex';
+                console.log('✅ Placeholder shown');
+            } else {
+                console.log('❌ No placeholder found');
+                // Create a new placeholder if none exists
+                const newPlaceholder = document.createElement('i');
+                newPlaceholder.className = 'fas fa-user voter-photo-placeholder';
+                newPlaceholder.title = 'Profile picture not available';
+                profileContainer.appendChild(newPlaceholder);
+                console.log('✅ New placeholder created');
+            }
+        });
+        
+        // Add loading class initially
+        profileImg.classList.add('loading');
+        
+        // Log debug info
+        const debugInfo = document.querySelector('.voter-photo div[style*="display: none"]');
+        if (debugInfo) {
+            console.log('Profile picture debug info:', debugInfo.textContent);
+        }
+    } else {
+        console.log('ℹ️ No profile picture found - showing placeholder by default');
+    }
+});
+</script>
+
+{% csrf_token %}
+{% endblock %}

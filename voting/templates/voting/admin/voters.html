@@ -1,0 +1,424 @@
+{% extends 'voting/admin/base.html' %}
+
+{% block title %}Manage Voters{% endblock %}
+
+{% block extra_css %}
+<style>
+    .voters-container {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    }
+    .search-box {
+        background: #f8f9fa;
+        border: 2px solid #e9ecef;
+        border-radius: 10px;
+        padding: 12px 15px;
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+    }
+    .search-box:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        background: white;
+    }
+    .table-responsive {
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+    .table {
+        margin-bottom: 0;
+    }
+    .table thead th {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        border: none;
+        font-weight: 600;
+        padding: 15px;
+    }
+    .table tbody td {
+        padding: 15px;
+        vertical-align: middle;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    .status-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    .status-verified {
+        background: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+    }
+    .status-pending {
+        background: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+    }
+    .status-rejected {
+        background: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+    }
+    .btn-action {
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: none;
+        font-size: 0.85rem;
+        margin: 0 2px;
+        transition: all 0.3s ease;
+    }
+    .btn-action:hover {
+        transform: translateY(-1px);
+    }
+    .pagination {
+        justify-content: center;
+        margin-top: 20px;
+    }
+    .page-link {
+        border-radius: 8px;
+        margin: 0 2px;
+        border: 2px solid #e9ecef;
+        color: #667eea;
+    }
+    .page-link:hover {
+        background-color: #667eea;
+        border-color: #667eea;
+        color: white;
+    }
+    .page-item.active .page-link {
+        background-color: #667eea;
+        border-color: #667eea;
+    }
+    .stats-row {
+        margin-bottom: 20px;
+    }
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+    }
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .stat-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">Voter Management</h1>
+            <p class="text-muted">Manage and monitor voter registrations and verifications.</p>
+        </div>
+        <a href="{% url 'voting:admin_add_voter' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Add Voter
+        </a>
+    </div>
+    
+    <!-- Statistics -->
+    <div class="row stats-row">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-number">{{ total_voters }}</div>
+                <div class="stat-label">Total Voters</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-number">{{ verified_voters }}</div>
+                <div class="stat-label">Verified</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-number">{{ pending_voters }}</div>
+                <div class="stat-label">Pending</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-number">{{ voted_count }}</div>
+                <div class="stat-label">Voted</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="voters-container">
+        <!-- Search and Filters -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <input type="text" class="form-control search-box" id="searchVoters" placeholder="Search by email, Aadhaar, or name...">
+            </div>
+            <div class="col-md-3">
+                <select class="form-control search-box" id="statusFilter">
+                    <option value="">All Status</option>
+                    <option value="verified">Verified</option>
+                    <option value="pending">Pending</option>
+                    <option value="rejected">Rejected</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-control search-box" id="votedFilter">
+                    <option value="">All Voters</option>
+                    <option value="voted">Voted</option>
+                    <option value="not_voted">Not Voted</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- Voters Table -->
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Aadhaar Number</th>
+                        <th>Registration Date</th>
+                        <th>Verification Status</th>
+                        <th>Voted</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="votersTableBody">
+                    {% for voter in voters %}
+                    <tr data-email="{{ voter.email }}" data-aadhaar="{{ voter.aadhaar_number }}" data-status="{{ voter.is_verified|yesno:'verified,pending' }}" data-voted="{{ voter.has_voted|yesno:'voted,not_voted' }}">
+                        <td>
+                            <strong>{{ voter.email }}</strong>
+                        </td>
+                        <td>
+                            <code>{{ voter.aadhaar_number|slice:":4" }}****{{ voter.aadhaar_number|slice:"-4:" }}</code>
+                        </td>
+                        <td>
+                            {{ voter.created_at|date:"M d, Y H:i" }}
+                        </td>
+                        <td>
+                            {% if voter.is_verified %}
+                                <span class="status-badge status-verified">
+                                    <i class="fas fa-check-circle me-1"></i>Verified
+                                </span>
+                            {% else %}
+                                <span class="status-badge status-pending">
+                                    <i class="fas fa-clock me-1"></i>Pending
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if voter.has_voted %}
+                                <span class="status-badge status-verified">
+                                    <i class="fas fa-vote-yea me-1"></i>Voted
+                                </span>
+                            {% else %}
+                                <span class="status-badge status-pending">
+                                    <i class="fas fa-times me-1"></i>Not Voted
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if not voter.is_verified %}
+                                <button class="btn btn-success btn-action" onclick="verifyVoter('{{ voter.id }}')"
+                                        title="Verify Voter">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-danger btn-action" onclick="rejectVoter('{{ voter.id }}')"
+                                        title="Reject Voter">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            {% endif %}
+                            <button class="btn btn-info btn-action" onclick="viewVoterDetails('{{ voter.id }}')"
+                                    title="View Details">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-warning btn-action" onclick="resetVoter('{{ voter.id }}')"
+                                    title="Reset Vote">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4">
+                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No voters found</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if voters.has_other_pages %}
+        <nav>
+            <ul class="pagination">
+                {% if voters.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ voters.previous_page_number }}">&laquo; Previous</a>
+                    </li>
+                {% endif %}
+                
+                {% for num in voters.paginator.page_range %}
+                    {% if voters.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                    {% else %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if voters.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ voters.next_page_number }}">Next &raquo;</a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Voter Details Modal -->
+<div class="modal fade" id="voterDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Voter Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="voterDetailsContent">
+                <!-- Content will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Search functionality
+    document.getElementById('searchVoters').addEventListener('input', filterVoters);
+    document.getElementById('statusFilter').addEventListener('change', filterVoters);
+    document.getElementById('votedFilter').addEventListener('change', filterVoters);
+    
+    function filterVoters() {
+        const searchTerm = document.getElementById('searchVoters').value.toLowerCase();
+        const statusFilter = document.getElementById('statusFilter').value;
+        const votedFilter = document.getElementById('votedFilter').value;
+        const rows = document.querySelectorAll('#votersTableBody tr');
+        
+        rows.forEach(row => {
+            const email = row.dataset.email?.toLowerCase() || '';
+            const aadhaar = row.dataset.aadhaar?.toLowerCase() || '';
+            const status = row.dataset.status || '';
+            const voted = row.dataset.voted || '';
+            
+            const matchesSearch = email.includes(searchTerm) || aadhaar.includes(searchTerm);
+            const matchesStatus = !statusFilter || status === statusFilter;
+            const matchesVoted = !votedFilter || voted === votedFilter;
+            
+            if (matchesSearch && matchesStatus && matchesVoted) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+    
+    // Voter actions
+    function verifyVoter(voterId) {
+        if (confirm('Are you sure you want to verify this voter?')) {
+            fetch(`/admin/voters/${voterId}/verify/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('An error occurred. Please try again.');
+            });
+        }
+    }
+    
+    function rejectVoter(voterId) {
+        if (confirm('Are you sure you want to reject this voter?')) {
+            fetch(`/admin/voters/${voterId}/reject/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('An error occurred. Please try again.');
+            });
+        }
+    }
+    
+    function resetVoter(voterId) {
+        if (confirm('Are you sure you want to reset this voter\'s vote? This action cannot be undone.')) {
+            fetch(`/admin/voters/${voterId}/reset/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('An error occurred. Please try again.');
+            });
+        }
+    }
+    
+    function viewVoterDetails(voterId) {
+        fetch(`/admin/voters/${voterId}/details/`)
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('voterDetailsContent').innerHTML = html;
+            new bootstrap.Modal(document.getElementById('voterDetailsModal')).show();
+        })
+        .catch(error => {
+            alert('An error occurred while loading voter details.');
+        });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,1074 @@
+{% extends 'voting/base.html' %}
+
+{% block title %}Vote Now - Decentralized Voting System{% endblock %}
+
+{% block extra_head %}
+<!-- EmailJS SDK -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="voting-container p-4">
+            <div class="text-center mb-4">
+                <h1 class="display-4 text-primary mb-3">
+                    <i class="fas fa-vote-yea me-3"></i>
+                    Cast Your Vote
+                </h1>
+                <p class="lead text-muted">{{ session.session_name }}</p>
+
+            </div>
+
+            <!-- Step Indicator -->
+            <div class="step-indicator">
+                <div class="step active" id="step-1">
+                    <i class="fas fa-user-check"></i>
+                </div>
+                <div class="step" id="step-2">
+                    <i class="fas fa-envelope"></i>
+                </div>
+                <div class="step" id="step-3">
+                    <i class="fas fa-vote-yea"></i>
+                </div>
+            </div>
+
+            <!-- Step 1: Aadhaar Image-Based Verification -->
+            <div class="verification-step active" id="verification-form">
+                <h3 class="text-center mb-4">Step 1: Aadhaar Verification</h3>
+                <div class="aadhaar-verification-container">
+                    <!-- Aadhaar Card Image Input -->
+                    <div class="aadhaar-input-section text-center mb-4">
+                        <div class="aadhaar-card-preview" id="aadhaar-preview">
+                            <svg width="300" height="180" viewBox="0 0 300 180" class="aadhaar-card-template">
+                                <!-- Aadhaar Card Background -->
+                                <rect width="300" height="180" fill="#f8f9fa" stroke="#dee2e6" stroke-width="2" rx="10"/>
+                                
+                                <!-- Header -->
+                                <rect x="10" y="10" width="280" height="30" fill="#0d6efd" rx="5"/>
+                                <text x="150" y="30" text-anchor="middle" fill="white" font-size="14" font-weight="bold">AADHAAR</text>
+                                
+                                <!-- Photo placeholder -->
+                                <rect x="20" y="50" width="60" height="70" fill="#e9ecef" stroke="#adb5bd" rx="5"/>
+                                <text x="50" y="90" text-anchor="middle" fill="#6c757d" font-size="10">PHOTO</text>
+                                
+                                <!-- Details section -->
+                                <text x="90" y="65" fill="#495057" font-size="10">Name: <tspan id="card-name">XXXX XXXX XXXX</tspan></text>
+                                <text x="90" y="80" fill="#495057" font-size="10">DOB: <tspan id="card-dob">XX/XX/XXXX</tspan></text>
+                                <text x="90" y="95" fill="#495057" font-size="10">Gender: <tspan id="card-gender">X</tspan></text>
+                                
+                                <!-- Aadhaar Number -->
+                                <rect x="20" y="130" width="260" height="25" fill="#fff3cd" stroke="#ffeaa7" rx="3"/>
+                                <text x="30" y="145" fill="#856404" font-size="12" font-weight="bold">Aadhaar Number:</text>
+                                <text x="30" y="160" fill="#856404" font-size="14" font-weight="bold" id="display-aadhaar">XXXX XXXX XXXX</text>
+                            </svg>
+                        </div>
+                        
+                        <!-- Image Upload Section -->
+                        <div class="image-upload-section mt-3">
+                            <label for="aadhaar-image" class="btn btn-outline-primary btn-lg">
+                                <i class="fas fa-camera me-2"></i>Capture/Upload Aadhaar Card
+                            </label>
+                            <input type="file" id="aadhaar-image" accept="image/*" capture="camera" style="display: none;">
+                            <div class="form-text mt-2">Take a photo or upload an image of your Aadhaar card</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Manual Input Fallback -->
+                    <div class="manual-input-section">
+                        <div class="text-center mb-3">
+                            <span class="text-muted">Or enter manually:</span>
+                        </div>
+                        <form id="aadhaar-verification-form">
+                            <div class="row justify-content-center">
+                                <div class="col-md-8">
+                                    <div class="input-group input-group-lg">
+                                        <span class="input-group-text">
+                                            <i class="fas fa-id-card"></i>
+                                        </span>
+                                        <input type="text" class="form-control" id="aadhaar_number" name="aadhaar_number" 
+                                               placeholder="Enter 12-digit Aadhaar number" pattern="[0-9]{12}" maxlength="12" required>
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-search me-2"></i>Verify
+                                        </button>
+                                    </div>
+                                    <div class="form-text">Enter your 12-digit Aadhaar number to find your profile</div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- Voter Profile Display -->
+                    <div class="voter-profile-section" id="voter-profile" style="display: none;">
+                        <div class="card mt-4">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-user-check me-2"></i>Voter Profile Found
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <h6 class="card-title" id="profile-name">Loading...</h6>
+                                        <p class="card-text">
+                                            <strong>Email:</strong> <span id="profile-email">Loading...</span><br>
+                                            <strong>Aadhaar:</strong> <span id="profile-aadhaar">Loading...</span><br>
+                                            <strong>Status:</strong> <span id="profile-status" class="badge bg-success">Eligible to Vote</span>
+                                        </p>
+                                    </div>
+                                    <div class="col-md-4 text-center">
+                                        <div class="voter-avatar">
+                                            <i class="fas fa-user-circle text-primary" style="font-size: 4rem;"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-center mt-3">
+                                    <button type="button" class="btn btn-success btn-lg" onclick="proceedToVoting()">
+                                        <i class="fas fa-arrow-right me-2"></i>Proceed to Voting
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-lg ms-2" onclick="resetVerification()">
+                                        <i class="fas fa-redo me-2"></i>Try Again
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Email Verification -->
+            <div class="verification-step" id="email-verification">
+                <h3 class="text-center mb-4">Step 2: Email Verification</h3>
+                <div class="text-center mb-4">
+                    <div class="alert alert-success">
+                        <i class="fas fa-envelope me-2"></i>
+                        A verification code has been sent to your email address.
+                    </div>
+                    <p class="text-muted">Welcome, <strong id="voter-name"></strong>!</p>
+                </div>
+                <form id="email-verification-form">
+                    <div class="row justify-content-center">
+                        <div class="col-md-6">
+                            <label for="verification_code" class="form-label">
+                                <i class="fas fa-key me-2"></i>Verification Code
+                            </label>
+                            <input type="text" class="form-control text-center" id="verification_code" 
+                                   name="verification_code" pattern="[0-9]{6}" maxlength="6" required
+                                   placeholder="Enter 6-digit code">
+                            <div class="form-text">For demo: Enter any 6-digit number</div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-check me-2"></i>Verify Email
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-lg ms-2" onclick="goToStep(1)">
+                            <i class="fas fa-arrow-left me-2"></i>Back
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Step 3: Vote Casting -->
+            <div class="verification-step" id="vote-casting">
+                <h3 class="text-center mb-4">Step 3: Select Your Candidate</h3>
+                <div class="alert alert-warning text-center">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Important:</strong> You can only vote once. Please review your selection carefully.
+                </div>
+                
+                <!-- Selected Candidate Display -->
+                <div id="selected-candidate-info" class="alert alert-info text-center mb-4" style="display: none;">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="mb-1">
+                                <i class="fas fa-check-circle me-2"></i>
+                                Selected Candidate: <span id="selected-party-name"></span>
+                            </h5>
+                            <p class="mb-0 text-muted">Click "Cast Vote" to confirm your selection</p>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="button" class="btn btn-success btn-lg" id="cast-selected-vote-btn">
+                                <i class="fas fa-vote-yea me-2"></i>Cast Vote
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <form id="vote-form">
+                    <div class="row">
+                        {% for party in parties %}
+                        <div class="col-md-6 mb-4">
+                            <div class="card party-card h-100" data-party-id="{{ party.id }}" data-party-name="{{ party.party_name }}">
+                                <div class="card-body text-center position-relative">
+                                    <!-- Selection Badge -->
+                                    <div class="selection-badge position-absolute top-0 end-0 m-2" style="display: none;">
+                                        <span class="badge bg-success rounded-pill">
+                                            <i class="fas fa-check"></i> Selected
+                                        </span>
+                                    </div>
+                                    
+                                    {% if party.party_symbol_url %}
+                                    <img src="{{ party.party_symbol_url }}" alt="{{ party.party_name }}" 
+                                         class="img-fluid mb-3" style="max-height: 80px;">
+                                    {% else %}
+                                    <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" 
+                                         style="width: 80px; height: 80px; font-size: 2rem;">
+                                        {{ party.party_name|first }}
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <h5 class="card-title">{{ party.party_name }}</h5>
+                                    {% if party.party_leader %}
+                                    <p class="card-text"><strong>Leader:</strong> {{ party.party_leader }}</p>
+                                    {% endif %}
+                                    {% if party.party_description %}
+                                    <p class="card-text text-muted small">{{ party.party_description|truncatewords:15 }}</p>
+                                    {% endif %}
+                                    
+                                    <!-- Hidden Radio Button -->
+                                    <input class="form-check-input d-none" type="radio" name="party_id" 
+                                           value="{{ party.id }}" id="party-{{ party.id }}">
+                                    
+                                    <!-- Vote Button for this candidate -->
+                                    <div class="candidate-vote-section mt-3">
+                                        <button type="button" class="btn btn-outline-primary btn-lg select-candidate-btn" 
+                                                data-party-id="{{ party.id }}" data-party-name="{{ party.party_name }}">
+                                            <i class="fas fa-hand-pointer me-2"></i>Select This Candidate
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Traditional Submit Button (hidden by default) -->
+                    <div class="text-center mt-4" id="traditional-vote-section" style="display: none;">
+                        <button type="submit" class="btn btn-success btn-lg" id="cast-vote-btn" disabled>
+                            <i class="fas fa-vote-yea me-2"></i>Cast My Vote
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-lg ms-2" onclick="goToStep(2)">
+                            <i class="fas fa-arrow-left me-2"></i>Back
+                        </button>
+                    </div>
+                    
+                    <!-- Navigation -->
+                    <div class="text-center mt-4">
+                        <button type="button" class="btn btn-outline-light btn-lg" onclick="goToStep(2)">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Verification
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Success Message -->
+            <div class="verification-step" id="vote-success">
+                <div class="text-center">
+                    <div class="mb-4">
+                        <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+                    </div>
+                    <h3 class="text-success mb-3">Vote Cast Successfully!</h3>
+                    <div class="alert alert-success">
+                        <p class="mb-2"><strong>Vote ID:</strong> <span id="vote-id"></span></p>
+                        <p class="mb-2"><strong>Timestamp:</strong> <span id="vote-timestamp"></span></p>
+                        <p class="mb-0"><strong>Blockchain Hash:</strong> <span id="blockchain-hash">Processing...</span></p>
+                    </div>
+                    <p class="text-muted">Your vote has been recorded on the blockchain for transparency and immutability.</p>
+                    <div class="mt-4">
+                        <a href="{% url 'voting:results' %}" class="btn btn-primary btn-lg">
+                            <i class="fas fa-chart-bar me-2"></i>View Results
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center p-4">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h5 id="loading-message">Processing...</h5>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.voting-container {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    color: white;
+}
+
+.step-indicator {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 2rem;
+}
+
+.step {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 1rem;
+    font-size: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.step.active {
+    background: rgba(255,255,255,0.9);
+    color: #667eea;
+    transform: scale(1.1);
+}
+
+.verification-step {
+    display: none;
+}
+
+.verification-step.active {
+    display: block;
+    animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Aadhaar Verification Styles */
+.aadhaar-verification-container {
+    background: rgba(255,255,255,0.1);
+    border-radius: 15px;
+    padding: 2rem;
+    backdrop-filter: blur(10px);
+}
+
+.aadhaar-card-template {
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+    transition: all 0.3s ease;
+}
+
+.aadhaar-card-template:hover {
+    transform: scale(1.02);
+}
+
+.aadhaar-input-section {
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+    padding-bottom: 2rem;
+    margin-bottom: 2rem;
+}
+
+.image-upload-section label {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.image-upload-section label:hover {
+    background: linear-gradient(135deg, #45a049, #4CAF50);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(76, 175, 80, 0.3);
+}
+
+.manual-input-section {
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+    padding-bottom: 2rem;
+    margin-bottom: 2rem;
+}
+
+.input-group-lg .form-control {
+    font-size: 1.1rem;
+    padding: 15px 20px;
+}
+
+.input-group-text {
+    background: rgba(255,255,255,0.9);
+    border: none;
+    color: #667eea;
+    font-size: 1.2rem;
+}
+
+.voter-profile-section .card {
+    background: rgba(255,255,255,0.95);
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    color: #333;
+}
+
+.voter-profile-section .card-header {
+    border-radius: 15px 15px 0 0 !important;
+    background: linear-gradient(135deg, #28a745, #20c997) !important;
+}
+
+.voter-avatar i {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.party-card {
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border: 3px solid transparent;
+    position: relative;
+    overflow: hidden;
+}
+
+.party-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+    border-color: #007bff;
+}
+
+.party-card.selected {
+    border-color: #28a745;
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.1), rgba(32, 201, 151, 0.1));
+    box-shadow: 0 10px 30px rgba(40, 167, 69, 0.3);
+    transform: translateY(-5px);
+}
+
+.party-card.selected .card-body {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 10px;
+}
+
+.selection-badge {
+    z-index: 10;
+    animation: bounceIn 0.5s ease;
+}
+
+@keyframes bounceIn {
+    0% { opacity: 0; transform: scale(0.3); }
+    50% { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+.select-candidate-btn {
+    transition: all 0.3s ease;
+    border-width: 2px;
+    font-weight: 600;
+}
+
+.select-candidate-btn:hover {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    border-color: #0056b3;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 123, 255, 0.3);
+}
+
+.party-card.selected .select-candidate-btn {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    border-color: #28a745;
+    color: white;
+}
+
+.party-card.selected .select-candidate-btn:hover {
+    background: linear-gradient(135deg, #218838, #1e7e34);
+    border-color: #1e7e34;
+}
+
+#selected-candidate-info {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.1), rgba(32, 201, 151, 0.1));
+    border: 2px solid #28a745;
+    border-radius: 15px;
+    animation: slideInDown 0.5s ease;
+}
+
+@keyframes slideInDown {
+    from { opacity: 0; transform: translateY(-30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+#cast-selected-vote-btn {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    border: none;
+    border-radius: 25px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+}
+
+#cast-selected-vote-btn:hover {
+    background: linear-gradient(135deg, #218838, #1e7e34);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
+}
+
+.candidate-vote-section {
+    margin-top: auto;
+}
+
+/* Pulse animation for selected state */
+.party-card.selected::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, #28a745, #20c997, #28a745);
+    z-index: -1;
+    border-radius: inherit;
+    animation: borderPulse 2s ease-in-out infinite;
+}
+
+@keyframes borderPulse {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+}
+
+.form-control {
+    border-radius: 10px;
+    border: none;
+    padding: 12px 15px;
+    background: rgba(255,255,255,0.9);
+    color: #333;
+}
+
+.form-control:focus {
+    background: white;
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.3);
+}
+
+.btn {
+    border-radius: 25px;
+    padding: 12px 30px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.alert {
+    border-radius: 15px;
+    border: none;
+}
+
+#countdown {
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+/* Animation for profile display */
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.voter-profile-section {
+    animation: slideInUp 0.6s ease;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .aadhaar-card-template {
+        width: 250px;
+        height: 150px;
+    }
+    
+    .aadhaar-verification-container {
+        padding: 1rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentStep = 1;
+let selectedPartyId = null;
+
+// Step navigation
+function goToStep(step) {
+    // Hide all steps
+    document.querySelectorAll('.verification-step').forEach(el => {
+        el.classList.remove('active');
+    });
+    
+    // Update step indicators
+    document.querySelectorAll('.step').forEach((el, index) => {
+        el.classList.remove('active', 'completed');
+        if (index + 1 < step) {
+            el.classList.add('completed');
+        } else if (index + 1 === step) {
+            el.classList.add('active');
+        }
+    });
+    
+    // Show target step
+    const stepElements = {
+        1: 'verification-form',
+        2: 'email-verification',
+        3: 'vote-casting',
+        4: 'vote-success'
+    };
+    
+    document.getElementById(stepElements[step]).classList.add('active');
+    currentStep = step;
+}
+
+// Aadhaar image upload handler
+document.getElementById('aadhaar-image').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        processAadhaarImage(file);
+    }
+});
+
+// Process Aadhaar image (simulated OCR)
+function processAadhaarImage(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        // Simulate OCR processing
+        showLoading('Processing Aadhaar image...');
+        
+        setTimeout(() => {
+            // Simulated extracted data (in real implementation, use OCR library)
+            const extractedAadhaar = '123456789012'; // This would come from OCR
+            
+            // Update the visual card
+            document.getElementById('display-aadhaar').textContent = formatAadhaarNumber(extractedAadhaar);
+            document.getElementById('aadhaar_number').value = extractedAadhaar;
+            
+            hideLoading();
+            
+            // Auto-verify the extracted Aadhaar
+            verifyAadhaarNumber(extractedAadhaar);
+        }, 2000);
+    };
+    reader.readAsDataURL(file);
+}
+
+// Aadhaar verification form
+document.getElementById('aadhaar-verification-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const aadhaarNumber = formData.get('aadhaar_number');
+    
+    if (!aadhaarNumber || aadhaarNumber.length !== 12) {
+        showAlert('Please enter a valid 12-digit Aadhaar number', 'warning');
+        return;
+    }
+    
+    verifyAadhaarNumber(aadhaarNumber);
+});
+
+// Verify Aadhaar number against database
+async function verifyAadhaarNumber(aadhaarNumber) {
+    showLoading('Searching voter database...');
+    
+    // Create timeout controller
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+        controller.abort();
+    }, 30000); // 30 second timeout
+    
+    try {
+        const response = await fetch('{% url "voting:aadhaar_verification" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ aadhaar_number: aadhaarNumber }),
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        hideLoading();
+        
+        if (result.success) {
+            // Redirect to voter profile page
+            if (result.redirect_url) {
+                window.location.href = result.redirect_url;
+            } else {
+                // Fallback - display voter profile inline
+                displayVoterProfile(result.voter);
+            }
+        } else {
+            showAlert(result.message, 'danger');
+        }
+    } catch (error) {
+        clearTimeout(timeoutId);
+        hideLoading();
+        
+        if (error.name === 'AbortError') {
+            showAlert('Request timed out. Please check your connection and try again.', 'warning');
+        } else {
+            console.error('Verification error:', error);
+            showAlert('An error occurred during verification. Please try again.', 'danger');
+        }
+    }
+}
+
+// Display voter profile
+function displayVoterProfile(voter) {
+    document.getElementById('profile-name').textContent = voter.full_name;
+    document.getElementById('profile-email').textContent = voter.email;
+    document.getElementById('profile-aadhaar').textContent = formatAadhaarNumber(voter.aadhaar_number);
+    
+    // Update status based on voting eligibility
+    const statusElement = document.getElementById('profile-status');
+    if (voter.has_voted) {
+        statusElement.textContent = 'Already Voted';
+        statusElement.className = 'badge bg-warning';
+    } else if (!voter.is_active) {
+        statusElement.textContent = 'Not Eligible';
+        statusElement.className = 'badge bg-danger';
+    } else {
+        statusElement.textContent = 'Eligible to Vote';
+        statusElement.className = 'badge bg-success';
+    }
+    
+    // Show profile section
+    document.getElementById('voter-profile').style.display = 'block';
+    
+    // Store voter data for next step
+    window.currentVoter = voter;
+}
+
+// Proceed to voting
+function proceedToVoting() {
+    if (window.currentVoter && !window.currentVoter.has_voted && window.currentVoter.is_active) {
+        // Store voter info in session
+        sessionStorage.setItem('verified_voter', JSON.stringify(window.currentVoter));
+        goToStep(3); // Go directly to voting step
+    } else {
+        showAlert('You are not eligible to vote or have already voted', 'warning');
+    }
+}
+
+// Reset verification
+function resetVerification() {
+    document.getElementById('voter-profile').style.display = 'none';
+    document.getElementById('aadhaar_number').value = '';
+    document.getElementById('display-aadhaar').textContent = 'XXXX XXXX XXXX';
+    window.currentVoter = null;
+}
+
+// Format Aadhaar number for display
+function formatAadhaarNumber(aadhaar) {
+    return aadhaar.replace(/(\d{4})(\d{4})(\d{4})/, '$1 $2 $3');
+}
+
+// Email verification
+document.getElementById('email-verification-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = {
+        verification_code: formData.get('verification_code')
+    };
+    
+    showLoading('Verifying email...');
+    
+    try {
+        const response = await fetch('{% url "voting:email_verification" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        hideLoading();
+        
+        if (result.success) {
+            goToStep(3);
+        } else {
+            showAlert(result.message, 'danger');
+        }
+    } catch (error) {
+        hideLoading();
+        showAlert('An error occurred during email verification', 'danger');
+    }
+});
+
+// Party selection - Enhanced candidate selection
+document.querySelectorAll('.select-candidate-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        
+        const partyId = this.getAttribute('data-party-id');
+        const partyName = this.getAttribute('data-party-name');
+        
+        selectCandidate(partyId, partyName);
+    });
+});
+
+// Enhanced candidate selection function
+function selectCandidate(partyId, partyName) {
+    // Remove selection from all cards
+    document.querySelectorAll('.party-card').forEach(card => {
+        card.classList.remove('selected');
+        const badge = card.querySelector('.selection-badge');
+        const btn = card.querySelector('.select-candidate-btn');
+        
+        if (badge) badge.style.display = 'none';
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-hand-pointer me-2"></i>Select This Candidate';
+            btn.className = 'btn btn-outline-primary btn-lg select-candidate-btn';
+        }
+    });
+    
+    // Clear radio buttons
+    document.querySelectorAll('input[name="party_id"]').forEach(input => input.checked = false);
+    
+    // Select the chosen candidate
+    const selectedCard = document.querySelector(`[data-party-id="${partyId}"]`);
+    if (selectedCard) {
+        selectedCard.classList.add('selected');
+        
+        // Show selection badge
+        const badge = selectedCard.querySelector('.selection-badge');
+        if (badge) badge.style.display = 'block';
+        
+        // Update button text and style
+        const btn = selectedCard.querySelector('.select-candidate-btn');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-check-circle me-2"></i>Selected';
+            btn.className = 'btn btn-success btn-lg select-candidate-btn';
+        }
+        
+        // Set the radio button
+        const radio = selectedCard.querySelector('input[name="party_id"]');
+        if (radio) radio.checked = true;
+    }
+    
+    // Update selected candidate info section
+    document.getElementById('selected-party-name').textContent = partyName;
+    document.getElementById('selected-candidate-info').style.display = 'block';
+    
+    // Store selection
+    selectedPartyId = partyId;
+    
+    // Enable traditional vote button (backup)
+    document.getElementById('cast-vote-btn').disabled = false;
+    
+    // Scroll to show the selected candidate info
+    document.getElementById('selected-candidate-info').scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'nearest' 
+    });
+}
+
+// Handle voting from the selected candidate info section
+document.getElementById('cast-selected-vote-btn').addEventListener('click', function() {
+    if (selectedPartyId) {
+        castVote();
+    } else {
+        showAlert('Please select a candidate first', 'warning');
+    }
+});
+
+// Enhanced vote casting function
+function castVote() {
+    if (!selectedPartyId) {
+        showAlert('Please select a candidate', 'warning');
+        return;
+    }
+    
+    // Show confirmation dialog
+    const selectedPartyName = document.getElementById('selected-party-name').textContent;
+    
+    if (confirm(`Are you sure you want to vote for ${selectedPartyName}? This action cannot be undone.`)) {
+        submitVote();
+    }
+}
+
+// Submit vote to server
+async function submitVote() {
+    const data = {
+        party_id: selectedPartyId
+    };
+    
+    showLoading('Casting your vote...');
+    
+    try {
+        const response = await fetch('{% url "voting:cast_vote" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        hideLoading();
+        
+        if (result.success) {
+            // Update success page
+            document.getElementById('vote-id').textContent = result.vote_id;
+            document.getElementById('vote-timestamp').textContent = new Date(result.timestamp).toLocaleString();
+            document.getElementById('blockchain-hash').textContent = result.blockchain_hash || 'Processing...';
+            
+            goToStep(4);
+        } else {
+            showAlert(result.message, 'danger');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Vote casting error:', error);
+        showAlert('An error occurred while casting your vote. Please try again.', 'danger');
+    }
+}
+
+// Legacy party card click (keep for compatibility)
+document.querySelectorAll('.party-card').forEach(card => {
+    card.addEventListener('click', function(e) {
+        // Only trigger if clicking on card itself, not on buttons
+        if (!e.target.closest('button')) {
+            const partyId = this.getAttribute('data-party-id');
+            const partyName = this.getAttribute('data-party-name');
+            selectCandidate(partyId, partyName);
+        }
+    });
+});
+
+// Vote casting - Enhanced form submission
+document.getElementById('vote-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    castVote();
+});
+
+// Utility functions
+function showLoading(message) {
+    document.getElementById('loading-message').textContent = message;
+    new bootstrap.Modal(document.getElementById('loadingModal')).show();
+}
+
+function hideLoading() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('loadingModal'));
+    if (modal) modal.hide();
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.voting-container');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// EmailJS OTP sending function
+function sendOTPEmail(emailjsConfig) {
+            return new Promise((resolve, reject) => {
+                console.log('EmailJS Config received:', emailjsConfig);
+                
+                // Check if EmailJS is loaded
+                if (typeof emailjs === 'undefined') {
+                    console.error('EmailJS library not loaded');
+                    reject(new Error('EmailJS library not loaded'));
+                    return;
+                }
+                
+                // Initialize EmailJS with public key
+                try {
+                    emailjs.init(emailjsConfig.public_key);
+                    console.log('EmailJS initialized with public key:', emailjsConfig.public_key);
+                } catch (initError) {
+                    console.error('EmailJS initialization failed:', initError);
+                    reject(initError);
+                    return;
+                }
+                
+                // Prepare template parameters
+                const templateParams = {
+                    to_email: emailjsConfig.to_email || emailjsConfig.template_params?.to_email,
+                    to_name: emailjsConfig.voter_name || emailjsConfig.template_params?.to_name,
+                    verification_code: emailjsConfig.otp_code || emailjsConfig.template_params?.verification_code
+                };
+                
+                console.log('Template params:', templateParams);
+                console.log('Service ID:', emailjsConfig.service_id);
+                console.log('Template ID:', emailjsConfig.template_id);
+                
+                // Send email using EmailJS
+                emailjs.send(
+                    emailjsConfig.service_id,
+                    emailjsConfig.template_id,
+                    templateParams
+                ).then(
+                    function(response) {
+                        console.log('Email sent successfully:', response);
+                        resolve(response);
+                    },
+                    function(error) {
+                        console.error('Email sending failed:', error);
+                        reject(error);
+                    }
+                );
+            });
+        }
+
+// Check for verified voter data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if user came from email verification
+    const verifiedVoter = sessionStorage.getItem('verified_voter');
+    if (verifiedVoter) {
+        try {
+            const voter = JSON.parse(verifiedVoter);
+            displayVoterProfile(voter);
+            
+            // Check if URL has #voting-section to show voting interface
+            if (window.location.hash === '#voting-section') {
+                goToStep(2); // Go to voting step
+            }
+            
+            // Clear the session storage to prevent reuse
+            sessionStorage.removeItem('verified_voter');
+        } catch (error) {
+            console.error('Error parsing verified voter data:', error);
+            sessionStorage.removeItem('verified_voter');
+        }
+    }
+});
+
+</script>
+{% endblock %}

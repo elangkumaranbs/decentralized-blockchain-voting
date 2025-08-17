@@ -1,0 +1,451 @@
+{% extends 'voting/base.html' %}
+
+{% block title %}No Active Session - Decentralized Voting System{% endblock %}
+
+{% block extra_head %}
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="voting-container p-5">
+            <div class="text-center mb-4">
+                <i class="fas fa-id-card text-primary" style="font-size: 4rem;"></i>
+                <h2 class="text-dark mb-3">Aadhaar Verification</h2>
+                <p class="text-muted mb-4">
+                    Please enter your Aadhaar number to verify your identity and access the voting system.
+                </p>
+            </div>
+            
+            <form id="aadhaarVerificationForm" class="mb-4">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="aadhaarNumber" class="form-label text-dark fw-bold">
+                        <i class="fas fa-id-card me-2 text-primary"></i>Aadhaar Number
+                    </label>
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text">
+                            <i class="fas fa-hashtag"></i>
+                        </span>
+                        <input type="text" 
+                               class="form-control" 
+                               id="aadhaarNumber" 
+                               name="aadhaar_number"
+                               placeholder="Enter 12-digit Aadhaar number"
+                               maxlength="12"
+                               pattern="[0-9]{12}"
+                               required>
+                    </div>
+                    <div class="form-text text-muted">
+                        Enter your 12-digit Aadhaar number without spaces or dashes
+                    </div>
+                </div>
+                
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-success btn-lg">
+                        <i class="fas fa-check-circle me-2"></i>
+                        Verify Aadhaar
+                    </button>
+                </div>
+            </form>
+            
+            <div id="verificationResult" class="alert" style="display: none;"></div>
+            
+            <div class="text-center">
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                    <a href="{% url 'voting:results' %}" class="btn btn-outline-primary btn-lg">
+                        <i class="fas fa-chart-bar me-2"></i>
+                        View Results
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('aadhaarVerificationForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const aadhaarNumber = document.getElementById('aadhaarNumber').value;
+    const resultDiv = document.getElementById('verificationResult');
+    
+    // Validate Aadhaar number format
+    if (!/^[0-9]{12}$/.test(aadhaarNumber)) {
+        resultDiv.className = 'alert alert-danger';
+        resultDiv.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Please enter a valid 12-digit Aadhaar number.';
+        resultDiv.style.display = 'block';
+        return;
+    }
+    
+    // Show loading state
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Verifying...';
+    submitBtn.disabled = true;
+    
+    // Send verification request
+    fetch('/verify-aadhaar/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({
+            aadhaar_number: aadhaarNumber
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.requires_otp) {
+                // Send OTP email using EmailJS and show verification form
+                sendOTPEmail(data.emailjs_config)
+                    .then(() => {
+                        showOTPVerificationForm(data.email, data.message);
+                    })
+                    .catch(error => {
+                        console.error('Failed to send OTP email:', error);
+                        resultDiv.className = 'alert alert-warning';
+                        resultDiv.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>OTP generated but email sending failed. Please contact support.';
+                        resultDiv.style.display = 'block';
+                        showOTPVerificationForm(data.email, 'Please enter the verification code (email sending may have failed)');
+                    });
+            } else {
+                resultDiv.className = 'alert alert-success';
+                resultDiv.innerHTML = `
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>Verification Successful!</strong><br>
+                    Welcome, ${data.voter.full_name}. Redirecting to voting page...
+                `;
+                resultDiv.style.display = 'block';
+                
+                // Redirect to voting page after 2 seconds
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 2000);
+            }
+        } else {
+            resultDiv.className = 'alert alert-danger';
+            resultDiv.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>${data.message}`;
+            resultDiv.style.display = 'block';
+        }
+    })
+    .catch(error => {
+        resultDiv.className = 'alert alert-danger';
+        resultDiv.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>An error occurred during verification. Please try again.';
+        resultDiv.style.display = 'block';
+    })
+    .finally(() => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+});
+
+// Function to show OTP verification form
+function showOTPVerificationForm(email, message) {
+    const container = document.querySelector('.voting-container');
+    container.innerHTML = `
+        <div class="text-center mb-4">
+            <i class="fas fa-envelope text-primary" style="font-size: 4rem;"></i>
+            <h2 class="text-dark mb-3">Email Verification</h2>
+            <p class="text-muted mb-4">
+                ${message}
+            </p>
+        </div>
+        
+        <form id="otpVerificationForm" class="mb-4">
+            <input type="hidden" name="csrfmiddlewaretoken" value="${document.querySelector('[name=csrfmiddlewaretoken]').value}">
+            <div class="mb-3">
+                <label for="otpCode" class="form-label text-dark fw-bold">
+                    <i class="fas fa-key me-2 text-primary"></i>Verification Code
+                </label>
+                <div class="input-group input-group-lg">
+                    <span class="input-group-text">
+                        <i class="fas fa-lock"></i>
+                    </span>
+                    <input type="text" 
+                           class="form-control text-center" 
+                           id="otpCode" 
+                           name="otp_code"
+                           placeholder="Enter 6-digit code"
+                           maxlength="6"
+                           pattern="[0-9]{6}"
+                           style="letter-spacing: 0.5em; font-size: 1.2em;"
+                           required>
+                </div>
+                <div class="form-text text-muted">
+                    Enter the 6-digit code sent to ${email}
+                    <br>
+                    <button type="button" class="btn btn-link btn-sm p-0 mt-1" id="resendOtpBtn">
+                        <i class="fas fa-redo me-1"></i>Didn't receive? Resend OTP
+                    </button>
+                </div>
+            </div>
+            
+            <div class="d-grid">
+                <button type="submit" class="btn btn-success btn-lg">
+                    <i class="fas fa-check-circle me-2"></i>
+                    Verify Code
+                </button>
+            </div>
+        </form>
+        
+        <div id="otpResult" class="alert" style="display: none;"></div>
+        
+        <div class="text-center">
+            <button id="backToAadhaar" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>
+                Back to Aadhaar Verification
+            </button>
+        </div>
+    `;
+    
+    // Add event listeners for OTP form
+    setupOTPFormListeners();
+    
+    // Setup resend OTP functionality
+    setupResendOTP(email);
+}
+
+// Function to setup OTP form event listeners
+function setupOTPFormListeners() {
+    // OTP form submission
+    document.getElementById('otpVerificationForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const otpCode = document.getElementById('otpCode').value;
+        const resultDiv = document.getElementById('otpResult');
+        
+        // Validate OTP format
+        if (!/^[0-9]{6}$/.test(otpCode)) {
+            resultDiv.className = 'alert alert-danger';
+            resultDiv.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Please enter a valid 6-digit code.';
+            resultDiv.style.display = 'block';
+            return;
+        }
+        
+        // Show loading state
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Verifying...';
+        submitBtn.disabled = true;
+        
+        // Send OTP verification request
+        fetch('/email/otp-verification/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                otp_code: otpCode
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.show_voting_interface) {
+                    // Show candidate profile and voting interface
+                    showVotingInterface(data.voter);
+                } else {
+                    resultDiv.className = 'alert alert-success';
+                    resultDiv.innerHTML = `<i class="fas fa-check-circle me-2"></i>${data.message}`;
+                    resultDiv.style.display = 'block';
+                }
+            } else {
+                resultDiv.className = 'alert alert-danger';
+                resultDiv.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>${data.message}`;
+                resultDiv.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            resultDiv.className = 'alert alert-danger';
+            resultDiv.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>An error occurred during verification. Please try again.';
+            resultDiv.style.display = 'block';
+        })
+        .finally(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        });
+    });
+    
+    // Back to Aadhaar button
+    document.getElementById('backToAadhaar').addEventListener('click', function() {
+        location.reload();
+    });
+    
+    // Format OTP input (numbers only)
+    document.getElementById('otpCode').addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+        if (value.length > 6) {
+            value = value.substring(0, 6);
+        }
+        e.target.value = value;
+    });
+}
+
+// Function to show voting interface with candidate profile
+function showVotingInterface(voter) {
+    const container = document.querySelector('.voting-container');
+    container.innerHTML = `
+        <div class="text-center mb-4">
+            <i class="fas fa-user-check text-success" style="font-size: 4rem;"></i>
+            <h2 class="text-dark mb-3">Candidate Profile Verified</h2>
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle me-2"></i>
+                <strong>Verification Complete!</strong> You can now proceed to vote.
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-user me-2"></i>Voter Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Name:</strong> ${voter.full_name}</p>
+                        <p><strong>Email:</strong> ${voter.email}</p>
+                        <p><strong>Aadhaar:</strong> ${voter.aadhaar_number}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Constituency:</strong> ${voter.constituency}</p>
+                        <p><strong>Region:</strong> ${voter.region}</p>
+                        <p><strong>Status:</strong> 
+                            <span class="badge ${voter.has_voted ? 'bg-warning' : 'bg-success'}">
+                                ${voter.has_voted ? 'Already Voted' : 'Eligible to Vote'}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="d-grid gap-2">
+            ${voter.has_voted ? 
+                '<div class="alert alert-warning"><i class="fas fa-info-circle me-2"></i>You have already cast your vote in this election.</div>' :
+                '<a href="{% url "voting:home" %}" class="btn btn-success btn-lg"><i class="fas fa-vote-yea me-2"></i>Proceed to Vote</a>'
+            }
+            <a href="{% url "voting:results" %}" class="btn btn-outline-primary btn-lg">
+                <i class="fas fa-chart-bar me-2"></i>
+                View Election Results
+            </a>
+        </div>
+    `;
+}
+
+// EmailJS initialization and OTP sending function
+function sendOTPEmail(emailjsConfig) {
+    return new Promise((resolve, reject) => {
+        // Initialize EmailJS with public key
+        emailjs.init(emailjsConfig.public_key);
+        
+        // Send email using EmailJS
+        emailjs.send(
+            emailjsConfig.service_id,
+            emailjsConfig.template_id,
+            emailjsConfig.template_params
+        ).then(
+            function(response) {
+                console.log('Email sent successfully:', response);
+                resolve(response);
+            },
+            function(error) {
+                console.error('Email sending failed:', error);
+                reject(error);
+            }
+        );
+    });
+}
+
+// Setup resend OTP functionality
+function setupResendOTP(email) {
+    const resendBtn = document.getElementById('resendOtpBtn');
+    if (resendBtn) {
+        resendBtn.addEventListener('click', function() {
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Resending...';
+            this.disabled = true;
+            
+            // Create timeout controller for resend request
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+            }, 20000); // 20 second timeout for resend
+            
+            // Call resend API
+            fetch('/resend-verification-email/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    email: email
+                }),
+                signal: controller.signal
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.emailjs_config) {
+                    // Send email using EmailJS
+                    return sendOTPEmail(data.emailjs_config);
+                } else {
+                    throw new Error(data.message || 'Failed to resend OTP');
+                }
+            })
+            .then(() => {
+                // Show success message
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-success alert-dismissible fade show mt-2';
+                alertDiv.innerHTML = `
+                    <i class="fas fa-check-circle me-2"></i>OTP resent successfully!
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                resendBtn.parentNode.appendChild(alertDiv);
+                
+                // Auto-dismiss after 3 seconds
+                setTimeout(() => {
+                    if (alertDiv.parentNode) {
+                        alertDiv.remove();
+                    }
+                }, 3000);
+            })
+            .catch(error => {
+                clearTimeout(timeoutId);
+                console.error('Resend failed:', error);
+                
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger alert-dismissible fade show mt-2';
+                
+                let errorMessage = 'Failed to resend OTP. Please try again.';
+                if (error.name === 'AbortError') {
+                    errorMessage = 'Request timed out. Please check your connection and try again.';
+                }
+                
+                alertDiv.innerHTML = `
+                    <i class="fas fa-exclamation-triangle me-2"></i>${errorMessage}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                resendBtn.parentNode.appendChild(alertDiv);
+            })
+            .finally(() => {
+                this.innerHTML = originalText;
+                this.disabled = false;
+            });
+        });
+    }
+}
+
+// Format Aadhaar number input (add spaces for readability)
+document.getElementById('aadhaarNumber').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+    if (value.length > 12) {
+        value = value.substring(0, 12);
+    }
+    e.target.value = value;
+});
+</script>
+{% endblock %}

@@ -1,0 +1,668 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block title %}Email OTP Verification - Blockchain Voting System{% endblock %}
+
+{% block extra_head %}
+<!-- EmailJS SDK -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .otp-container {
+        max-width: 500px;
+        margin: 60px auto;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+    
+    .otp-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 40px 30px;
+        text-align: center;
+    }
+    
+    .otp-header h2 {
+        margin: 0 0 10px 0;
+        font-weight: bold;
+    }
+    
+    .otp-header p {
+        margin: 0;
+        opacity: 0.9;
+    }
+    
+    .otp-content {
+        padding: 40px 30px;
+    }
+    
+    .email-info {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 30px;
+        text-align: center;
+    }
+    
+    .email-info .email-address {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #495057;
+        margin: 10px 0;
+    }
+    
+    .otp-input-section {
+        text-align: center;
+        margin: 30px 0;
+    }
+    
+    .otp-input-group {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin: 20px 0;
+    }
+    
+    .otp-digit {
+        width: 50px;
+        height: 50px;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        text-align: center;
+        font-size: 1.5rem;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    
+    .otp-digit:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        outline: none;
+    }
+    
+    .otp-digit.filled {
+        background: #e7f3ff;
+        border-color: #667eea;
+    }
+    
+    .btn-verify-otp {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        border: none;
+        color: white;
+        padding: 12px 40px;
+        border-radius: 25px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        width: 100%;
+        margin: 20px 0;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-verify-otp:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        color: white;
+    }
+    
+    .btn-verify-otp:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+    
+    .resend-section {
+        text-align: center;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #e9ecef;
+    }
+    
+    .resend-timer {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+    }
+    
+    .session-timer {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+    
+    .session-timer.expired {
+        background: #f8d7da;
+        border-color: #f5c6cb;
+        color: #721c24;
+    }
+    
+    .session-timer .timer-text {
+        font-size: 0.9rem;
+        margin-bottom: 5px;
+    }
+    
+    .session-timer .timer-countdown {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #856404;
+    }
+    
+    .session-timer.expired .timer-countdown {
+        color: #721c24;
+    }
+    
+    .btn-resend {
+        background: none;
+        border: 2px solid #667eea;
+        color: #667eea;
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-resend:hover {
+        background: #667eea;
+        color: white;
+    }
+    
+    .btn-resend:disabled {
+        border-color: #6c757d;
+        color: #6c757d;
+        cursor: not-allowed;
+    }
+    
+    .alert {
+        border-radius: 10px;
+        border: none;
+        margin-bottom: 20px;
+    }
+    
+    .loading-spinner {
+        display: none;
+        text-align: center;
+        margin: 20px 0;
+    }
+    
+    .spinner-border {
+        color: #667eea;
+    }
+    
+    .back-link {
+        text-align: center;
+        margin-top: 20px;
+    }
+    
+    .back-link a {
+        color: #6c757d;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    
+    .back-link a:hover {
+        color: #495057;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="otp-container">
+    <div class="otp-header">
+        <i class="fas fa-envelope-open-text" style="font-size: 3rem; margin-bottom: 15px;"></i>
+        <h2>Email Verification</h2>
+        <p>Enter the OTP sent to your email</p>
+    </div>
+    
+    <div class="otp-content">
+        <!-- Messages -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+        
+        <div class="email-info">
+            <i class="fas fa-envelope text-primary" style="font-size: 1.5rem;"></i>
+            <div class="email-address">{{ email }}</div>
+            <small class="text-muted">We've sent a 6-digit verification code to this email</small>
+        </div>
+        
+        <!-- Session Timer -->
+        <div class="session-timer" id="sessionTimer">
+            <div class="timer-text">Session expires in:</div>
+            <div class="timer-countdown" id="sessionCountdown">15:00</div>
+        </div>
+        
+        <form id="otpForm" method="post">
+            {% csrf_token %}
+            <div class="otp-input-section">
+                <label class="form-label fw-bold">Enter 6-Digit OTP</label>
+                <div class="otp-input-group">
+                    <input type="text" class="otp-digit" maxlength="1" data-index="0">
+                    <input type="text" class="otp-digit" maxlength="1" data-index="1">
+                    <input type="text" class="otp-digit" maxlength="1" data-index="2">
+                    <input type="text" class="otp-digit" maxlength="1" data-index="3">
+                    <input type="text" class="otp-digit" maxlength="1" data-index="4">
+                    <input type="text" class="otp-digit" maxlength="1" data-index="5">
+                </div>
+                <input type="hidden" name="otp_code" id="otpCode">
+                <input type="hidden" name="email" value="{{ email }}">
+            </div>
+            
+            <button type="submit" class="btn btn-verify-otp" id="verifyBtn">
+                <i class="fas fa-check-circle me-2"></i>Verify OTP
+            </button>
+        </form>
+        
+        <div class="loading-spinner" id="loadingSpinner">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Verifying OTP...</p>
+        </div>
+        
+        <div class="resend-section">
+            <div class="resend-timer" id="resendTimer">
+                Resend OTP in <span id="countdown">60</span> seconds
+            </div>
+            <button class="btn btn-resend" id="resendBtn" onclick="resendOTP()" disabled>
+                <i class="fas fa-redo me-2"></i>Resend OTP
+            </button>
+        </div>
+        
+        <div class="back-link">
+            <a href="{% url 'voting:home' %}">
+                <i class="fas fa-arrow-left me-2"></i>Back to Voter Verification
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let countdownTimer;
+let sessionTimer;
+let timeLeft = 60;
+let sessionTimeLeft = 900; // 15 minutes for session expiry (900 seconds)
+let sessionExpired = false;
+
+// OTP Input Handling
+document.addEventListener('DOMContentLoaded', function() {
+    const otpInputs = document.querySelectorAll('.otp-digit');
+    const otpCode = document.getElementById('otpCode');
+    
+    otpInputs.forEach((input, index) => {
+        input.addEventListener('input', function(e) {
+            const value = e.target.value;
+            
+            // Only allow numbers
+            if (!/^[0-9]$/.test(value)) {
+                e.target.value = '';
+                return;
+            }
+            
+            // Add filled class
+            e.target.classList.add('filled');
+            
+            // Move to next input
+            if (value && index < otpInputs.length - 1) {
+                otpInputs[index + 1].focus();
+            }
+            
+            // Update hidden input
+            updateOTPCode();
+        });
+        
+        input.addEventListener('keydown', function(e) {
+            // Handle backspace
+            if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                otpInputs[index - 1].focus();
+                otpInputs[index - 1].value = '';
+                otpInputs[index - 1].classList.remove('filled');
+                updateOTPCode();
+            }
+        });
+        
+        input.addEventListener('paste', function(e) {
+            e.preventDefault();
+            const pastedData = e.clipboardData.getData('text');
+            const digits = pastedData.replace(/\D/g, '').slice(0, 6);
+            
+            digits.split('').forEach((digit, i) => {
+                if (otpInputs[i]) {
+                    otpInputs[i].value = digit;
+                    otpInputs[i].classList.add('filled');
+                }
+            });
+            
+            updateOTPCode();
+            
+            // Focus on next empty input or last input
+            const nextEmptyIndex = digits.length < 6 ? digits.length : 5;
+            otpInputs[nextEmptyIndex].focus();
+        });
+    });
+    
+    function updateOTPCode() {
+        const otp = Array.from(otpInputs).map(input => input.value).join('');
+        otpCode.value = otp;
+        
+        // Enable/disable verify button
+        const verifyBtn = document.getElementById('verifyBtn');
+        verifyBtn.disabled = otp.length !== 6;
+    }
+    
+    // Start countdown timer
+    startCountdown();
+    
+    // Start session timer
+    startSessionTimer();
+});
+
+function startCountdown() {
+    const countdownElement = document.getElementById('countdown');
+    const resendBtn = document.getElementById('resendBtn');
+    
+    countdownTimer = setInterval(() => {
+        timeLeft--;
+        countdownElement.textContent = timeLeft;
+        
+        if (timeLeft <= 0) {
+            clearInterval(countdownTimer);
+            document.getElementById('resendTimer').style.display = 'none';
+            resendBtn.disabled = false;
+            resendBtn.innerHTML = '<i class="fas fa-redo me-2"></i>Resend OTP';
+        }
+    }, 1000);
+}
+
+function startSessionTimer() {
+    const sessionCountdownElement = document.getElementById('sessionCountdown');
+    const sessionTimerElement = document.getElementById('sessionTimer');
+    
+    sessionTimer = setInterval(() => {
+        sessionTimeLeft--;
+        
+        // Format time as MM:SS
+        const minutes = Math.floor(sessionTimeLeft / 60);
+        const seconds = sessionTimeLeft % 60;
+        const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        sessionCountdownElement.textContent = formattedTime;
+        
+        if (sessionTimeLeft <= 0) {
+            clearInterval(sessionTimer);
+            sessionExpired = true;
+            
+            // Update UI to show session expired
+            sessionTimerElement.classList.add('expired');
+            sessionTimerElement.querySelector('.timer-text').textContent = 'Verification session expired';
+            sessionCountdownElement.textContent = '00:00';
+            
+            // Show error alert
+            showAlert('Verification session expired. Please request a new OTP.', 'danger');
+        }
+    }, 1000);
+    
+    // Add session refresh mechanism
+    let sessionRefreshInterval = setInterval(() => {
+        if (!sessionExpired) {
+            fetch('{% url "voting:refresh_verification_session" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Session refreshed successfully
+                    console.log('Session refreshed');
+                } else {
+                    console.log('Session refresh failed:', data.message);
+                    clearInterval(sessionRefreshInterval);
+                }
+            })
+            .catch(error => {
+                console.error('Session refresh error:', error);
+                clearInterval(sessionRefreshInterval);
+            });
+        } else {
+            clearInterval(sessionRefreshInterval);
+        }
+    }, 600000); // Refresh every 10 minutes
+}
+
+function resendOTP() {
+    const resendBtn = document.getElementById('resendBtn');
+    resendBtn.disabled = true;
+    resendBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending...';
+    
+    // Create timeout controller
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+        controller.abort();
+    }, 20000); // 20 second timeout
+    
+    fetch('{% url "voting:resend_verification" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            'email': '{{ email }}'
+        }),
+        signal: controller.signal
+    })
+    .then(response => response.json())
+    .then(async data => {
+        clearTimeout(timeoutId);
+        if (data.success) {
+            // Send OTP email using EmailJS if config is provided
+            if (data.emailjs_config) {
+                try {
+                    await sendOTPEmail(data.emailjs_config);
+                    // Reset timers
+                    timeLeft = 60;
+                    sessionTimeLeft = 900; // Reset to 15 minutes
+                    sessionExpired = false;
+                    
+                    // Reset session timer UI
+                    const sessionTimerElement = document.getElementById('sessionTimer');
+                    sessionTimerElement.classList.remove('expired');
+                    sessionTimerElement.querySelector('.timer-text').textContent = 'Session expires in:';
+                    
+                    document.getElementById('resendTimer').style.display = 'block';
+                    startCountdown();
+                    startSessionTimer();
+                    
+                    // Show success message
+                    showAlert('OTP resent successfully!', 'success');
+                } catch (error) {
+                    console.error('Failed to send OTP email:', error);
+                    showAlert('Failed to send OTP email. Please try again.', 'danger');
+                    resendBtn.disabled = false;
+                    resendBtn.innerHTML = '<i class="fas fa-redo me-2"></i>Resend OTP';
+                }
+            } else {
+                showAlert('Email configuration error. Please try again.', 'danger');
+                resendBtn.disabled = false;
+                resendBtn.innerHTML = '<i class="fas fa-redo me-2"></i>Resend OTP';
+            }
+        } else {
+            showAlert('Error resending OTP: ' + data.message, 'danger');
+            resendBtn.disabled = false;
+            resendBtn.innerHTML = '<i class="fas fa-redo me-2"></i>Resend OTP';
+        }
+    })
+    .catch(error => {
+        clearTimeout(timeoutId);
+        console.error('Error:', error);
+        
+        let errorMessage = 'An error occurred while resending OTP.';
+        if (error.name === 'AbortError') {
+            errorMessage = 'Request timed out. Please check your connection and try again.';
+        }
+        
+        showAlert(errorMessage, 'danger');
+        resendBtn.disabled = false;
+        resendBtn.innerHTML = '<i class="fas fa-redo me-2"></i>Resend OTP';
+    });
+}
+
+// EmailJS OTP sending function
+function sendOTPEmail(emailjsConfig) {
+    return new Promise((resolve, reject) => {
+        console.log('EmailJS Config received:', emailjsConfig);
+        
+        // Check if EmailJS is loaded
+        if (typeof emailjs === 'undefined') {
+            console.error('EmailJS library not loaded');
+            reject(new Error('EmailJS library not loaded'));
+            return;
+        }
+        
+        // Initialize EmailJS with public key
+        try {
+            emailjs.init(emailjsConfig.public_key);
+            console.log('EmailJS initialized with public key:', emailjsConfig.public_key);
+        } catch (initError) {
+            console.error('EmailJS initialization failed:', initError);
+            reject(initError);
+            return;
+        }
+        
+        // Prepare template parameters
+        const templateParams = {
+            to_email: emailjsConfig.to_email || emailjsConfig.template_params?.to_email,
+            to_name: emailjsConfig.voter_name || emailjsConfig.template_params?.to_name,
+            verification_code: emailjsConfig.otp_code || emailjsConfig.template_params?.verification_code
+        };
+        
+        console.log('Template params:', templateParams);
+        console.log('Service ID:', emailjsConfig.service_id);
+        console.log('Template ID:', emailjsConfig.template_id);
+        
+        // Send email using EmailJS
+        emailjs.send(
+            emailjsConfig.service_id,
+            emailjsConfig.template_id,
+            templateParams
+        ).then(
+            function(response) {
+                console.log('Email sent successfully:', response);
+                resolve(response);
+            },
+            function(error) {
+                console.error('Email sending failed:', error);
+                reject(error);
+            }
+        );
+    });
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.otp-content');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // Auto dismiss after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Form submission
+document.getElementById('otpForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Check if session has expired
+    if (sessionExpired) {
+        showAlert('Verification session expired. Please request a new OTP.', 'danger');
+        return;
+    }
+    
+    const otpCode = document.getElementById('otpCode').value;
+    if (otpCode.length !== 6) {
+        showAlert('Please enter a complete 6-digit OTP.', 'warning');
+        return;
+    }
+    
+    // Show loading
+    document.getElementById('verifyBtn').style.display = 'none';
+    document.getElementById('loadingSpinner').style.display = 'block';
+    
+    // Submit via AJAX
+    fetch('{% url "voting:email_otp_verification" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            'otp_code': otpCode
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Store verified voter data
+            sessionStorage.setItem('verified_voter', JSON.stringify(data.voter));
+            
+            // Show success message and redirect
+            showAlert('Email verified successfully! Redirecting to voting...', 'success');
+            
+            setTimeout(() => {
+                window.location.href = '{% url "voting:home" %}#voting-section';
+            }, 1500);
+        } else {
+            // Show error message
+            showAlert(data.message, 'danger');
+            
+            // Reset form
+            document.getElementById('verifyBtn').style.display = 'block';
+            document.getElementById('loadingSpinner').style.display = 'none';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('An error occurred during verification. Please try again.', 'danger');
+        
+        // Reset form
+        document.getElementById('verifyBtn').style.display = 'block';
+        document.getElementById('loadingSpinner').style.display = 'none';
+    });
+});
+
+// Auto-dismiss alerts
+setTimeout(function() {
+    const alerts = document.querySelectorAll('.alert');
+    alerts.forEach(alert => {
+        if (alert.querySelector('.btn-close')) {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }
+    });
+}, 5000);
+</script>
+{% endblock %}
